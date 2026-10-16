@@ -105,6 +105,9 @@
       header .w-52 { width: auto !important; }
       #quickSettingsWrapper { display: none !important; }
 
+      /* Notifications panel: span the screen width instead of overflowing the left edge */
+      #notifPanel { position: fixed; top: 3.5rem; left: 8px; right: 8px; width: auto; }
+
       /* Search field: hide text label, keep icon */
       #searchFieldLabel { display: none; }
 
@@ -118,6 +121,11 @@
       #view-tools.view.active,
       #view-options.view.active,
       #view-filters.view.active { flex-direction: column !important; overflow-y: auto !important; }
+
+      /* Extra space below forms with dropdowns, so a <select> near the bottom
+         can be scrolled up and its option list has room to open downwards */
+      #view-filters > div,
+      #view-options > div { padding-bottom: 40vh; }
 
       /* Prevent iOS from zooming on input focus */
       input, select, textarea { font-size: 16px !important; }
@@ -577,8 +585,6 @@
       <div id="emailBody" class="flex-1 overflow-y-auto px-6 py-5 text-sm text-slate-700 leading-relaxed whitespace-pre-line"></div>
     </div>
   </div>
-</div>
-
 </div><!-- end view-inbox -->
 
 <!-- VIEW: Contacts (Επαφές) -->
@@ -702,7 +708,7 @@
       <!-- Create folder -->
       <section class="bg-white rounded-xl border border-slate-200 p-5">
         <h3 class="font-semibold text-slate-700 mb-4">Δημιουργία Φακέλου</h3>
-        <div class="flex flex-col sm:flex-row gap-3 items-end">
+        <div class="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div class="flex-1">
             <label class="text-xs text-slate-500 block mb-1">Όνομα νέου φακέλου</label>
             <input id="newFolderName" type="text" placeholder="π.χ. Εργασίες 2026"
@@ -786,10 +792,6 @@
   </div>
 </div>
 
-    </div>
-  </div>
-</div>
-
 <!-- VIEW: Tools (Εργαλεία) -->
 <div id="view-tools" class="view bg-slate-50" style="overflow-y:auto">
   <div class="max-w-3xl mx-auto p-6 w-full">
@@ -810,8 +812,8 @@
         </div>
         <p class="text-xs text-slate-500 leading-relaxed">Αναζητήστε χρήστες στον κατάλογο του Πανεπιστημίου Αθηνών (LDAP). Βρείτε email, τηλέφωνο και στοιχεία επικοινωνίας συναδέλφων και μελών ΔΕΠ.</p>
         <div class="flex gap-2 mt-auto pt-1">
-          <input id="dirSearchInput" type="text" placeholder="Αναζήτηση ονόματος…" class="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
-          <button onclick="searchDirectory()" class="bg-uni-600 hover:bg-uni-700 text-white rounded-lg px-3 py-1.5 text-sm font-medium transition">Αναζήτηση</button>
+          <input id="dirSearchInput" type="text" placeholder="Όνομα…" class="flex-1 min-w-0 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+          <button onclick="searchDirectory()" class="flex-shrink-0 bg-uni-600 hover:bg-uni-700 text-white rounded-lg px-3 py-1.5 text-sm font-medium transition">Αναζήτηση</button>
         </div>
         <div id="dirResults" class="hidden text-xs text-slate-600 bg-slate-50 rounded-lg p-3 leading-relaxed"></div>
       </div>
@@ -859,9 +861,9 @@
         <p class="text-xs text-slate-500 leading-relaxed">Κατεβάστε αλληλογραφία από εξωτερικό λογαριασμό POP3 απευθείας στα Εισερχόμενά σας.</p>
         <div class="flex flex-col gap-2 mt-auto pt-1">
           <input id="pop3Host" type="text" placeholder="mail.example.com" class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
-          <div class="flex gap-2">
-            <input id="pop3User" type="text" placeholder="Όνομα χρήστη" class="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
-            <input id="pop3Pass" type="password" placeholder="Κωδικός" class="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input id="pop3User" type="text" placeholder="Όνομα χρήστη" class="flex-1 min-w-0 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+            <input id="pop3Pass" type="password" placeholder="Κωδικός" class="flex-1 min-w-0 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
           </div>
           <button onclick="fetchPop3()" class="bg-amber-500 hover:bg-amber-600 text-white rounded-lg px-4 py-1.5 text-sm font-medium transition">Λήψη Αλληλογραφίας</button>
         </div>
@@ -2252,11 +2254,13 @@ function renderFoldersView() {
     renameList.innerHTML = `<p class="text-sm text-slate-400">Δεν βρέθηκαν φάκελοι</p>`;
   } else {
     renameList.innerHTML = customFolders.map((f, i) => `
-      <div class="flex items-center gap-2">
-        <span class="text-sm text-slate-700 w-36 truncate">${f}</span>
-        <input type="text" placeholder="Νέο όνομα…" id="rename-${i}"
-          class="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
-        <button onclick="renameFolder(${i})" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium transition">Μετονομασία</button>
+      <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+        <span class="text-sm text-slate-700 sm:w-36 truncate">${f}</span>
+        <div class="flex items-center gap-2 flex-1 min-w-0">
+          <input type="text" placeholder="Νέο όνομα…" id="rename-${i}"
+            class="flex-1 min-w-0 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+          <button onclick="renameFolder(${i})" class="flex-shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium transition">Μετονομασία</button>
+        </div>
       </div>`).join('');
   }
 
@@ -2277,12 +2281,14 @@ function renderFoldersView() {
   const subscribed = ALL_SUBSCRIPTION_FOLDERS.filter(f => f.tab === 'mine');
   sharedList.innerHTML = subscribed.map(f => `
     <div class="flex items-center justify-between gap-2 py-1.5 border-b border-slate-50">
-      <div class="flex items-center gap-2">
-        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
-        <span class="text-sm text-slate-700 font-medium">${f.label}</span>
-        <span class="text-xs text-slate-400">${f.desc}</span>
+      <div class="flex items-start sm:items-center gap-2 min-w-0">
+        <svg class="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5 sm:mt-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:gap-2 min-w-0">
+          <span class="text-sm text-slate-700 font-medium break-words">${f.label.replace(/\./g, '.<wbr>')}</span>
+          <span class="text-xs text-slate-400">${f.desc}</span>
+        </div>
       </div>
-      <button onclick="toggleSubscription('${f.key}', false); renderFoldersView()" class="text-xs rounded-lg px-3 py-1 transition border border-red-100 text-red-500 hover:bg-red-50">
+      <button onclick="toggleSubscription('${f.key}', false); renderFoldersView()" class="flex-shrink-0 text-xs rounded-lg px-3 py-1 transition border border-red-100 text-red-500 hover:bg-red-50">
         Κατάργηση
       </button>
     </div>`).join('') || `<p class="text-xs text-slate-400">Δεν υπάρχουν ενεργές συνδρομές</p>`;
