@@ -2211,6 +2211,14 @@ function renderSubTab() {
 }
 
 
+// Subscribe to / unsubscribe from a single shared folder
+function toggleSubscription(key, subscribe) {
+  const f = ALL_SUBSCRIPTION_FOLDERS.find(x => x.key === key);
+  if (!f) return;
+  f.tab = subscribe ? 'mine' : 'system';
+  showToast(subscribe ? `Εγγραφή στον φάκελο ${f.label}` : `Ακυρώθηκε η συνδρομή από τον φάκελο ${f.label}`);
+}
+
 function applySubscriptions() {
   // Collect checked keys from current list
   const checkedKeys = [...document.querySelectorAll('#subFolderList input[type=checkbox]:checked')]
@@ -2559,6 +2567,9 @@ function updateQsUI() {
 function setPageSize(n) {
   PAGE_SIZE = n;
   currentPage = 1;
+  // Keep the options page select in sync
+  const optPerPage = document.getElementById('opt-perpage');
+  if (optPerPage) optPerPage.value = n;
   toggleQuickSettings();
   renderEmailList();
   showToast(`Εμφάνιση ${n} μηνυμάτων ανά σελίδα`);
@@ -2592,10 +2603,11 @@ document.addEventListener('click', e => {
 // ─── Options ────────────────────────────────────────────────────────────────
 function saveOptions() {
   const perpage = parseInt(document.getElementById('opt-perpage')?.value || '20');
-  if (!isNaN(perpage) && perpage > 0) {
+  if (!isNaN(perpage) && perpage > 0 && perpage !== PAGE_SIZE) {
     // Apply messages-per-page setting live
-    const PAGE_SIZE_NEW = perpage;
-    window._pageSizeOverride = PAGE_SIZE_NEW;
+    PAGE_SIZE = perpage;
+    currentPage = 1;
+    renderEmailList();
   }
   showToast('Οι ρυθμίσεις αποθηκεύτηκαν');
 }
