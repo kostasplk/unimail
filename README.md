@@ -6,7 +6,7 @@ UniMail is a front-end prototype that reimagines the legacy SquirrelMail-based w
 
 > **Note:** This is a UI/UX prototype. It runs entirely in the browser on mock data. There is no mail server or backend, so nothing is actually sent or stored.
 
-**Live demo:** https://&lt;your-username&gt;.github.io/unimail/
+**Live demo:** https://kostasplk.github.io/unimail/
 
 ![Desktop view](docs/desktop.png)
 
@@ -49,12 +49,16 @@ UniMail is a front-end prototype that reimagines the legacy SquirrelMail-based w
 - [Tailwind CSS](https://tailwindcss.com/) via CDN
 - A single self-contained `index.html` with no build step
 
+## How it was built
+
+Built with AI assistance (Claude Code). I defined the requirements, audited the legacy system, designed the feature set and directed the implementation; the AI helped write and refactor the code.
+
 ## Running locally
 
 No installation needed. Clone the repo and open `index.html` in a browser:
 
 ```bash
-git clone https://github.com/<your-username>/unimail.git
+git clone https://github.com/kostasplk/unimail.git
 cd unimail
 start index.html      # Windows
 open index.html       # macOS
