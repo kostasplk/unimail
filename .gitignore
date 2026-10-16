@@ -1,0 +1,20 @@
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# AI assistant / local tooling config
+.claude/
+CLAUDE.md
+
+# Dependencies and local tooling
+node_modules/
+*.log
+
+# Local test screenshots (README images live in docs/)
+/screenshot*.png

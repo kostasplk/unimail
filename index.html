@@ -1,0 +1,2824 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UniMail</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            uni: {
+              50:  '#eff6ff',
+              100: '#dbeafe',
+              200: '#bfdbfe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    .email-item.active { background: #eff6ff; border-left: 3px solid #2563eb; }
+    .email-item:hover:not(.active) { background: #f8fafc; }
+    .email-item.unread .email-subject { font-weight: 700; color: #0f172a; }
+    .email-item.unread .email-sender { font-weight: 700; color: #0f172a; }
+    .sidebar-item.active { background: #dbeafe; color: #1d4ed8; font-weight: 600; }
+    .sidebar-item:hover:not(.active) { background: #f1f5f9; }
+    .compose-modal { display: none; }
+    .compose-modal.open { display: flex; }
+    .badge { min-width: 20px; height: 20px; font-size: 11px; }
+    .tag { font-size: 11px; padding: 1px 7px; border-radius: 9999px; }
+    select option { background: white; color: #334155; }
+    .nav-tab { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 16px; font-size: 12px; font-weight: 500; color: #cbd5e1; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.15s; white-space: nowrap; }
+    .nav-tab:hover { color: #fff; background: rgba(255,255,255,0.08); }
+    .nav-tab.active { color: #fff; border-bottom-color: #60a5fa; }
+    .view { display: none; }
+    .view.active { display: flex; flex-direction: row; flex: 1 1 auto; min-height: 0; }
+
+    /* Mobile sidebar overlay */
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 40; }
+    .sidebar-overlay.open { display: block; }
+
+    @media (max-width: 767px) {
+      /* Fill full phone screen height */
+      body { height: 100dvh !important; }
+
+      /* Nav tabs — icons only */
+      .nav-tab { padding: 6px 10px; }
+      .nav-tab span.nav-label { display: none; }
+
+      /* Active view must fill remaining height */
+      .view.active { flex: 1 1 auto !important; min-height: 0 !important; }
+
+      /* Email list takes full width AND full height */
+      #emailListPane { width: 100% !important; flex: 1 1 auto !important; min-height: 0 !important; align-self: stretch !important; }
+
+      /* Sidebar drawer — hidden by default, slides in from left below the header */
+      #mainSidebar {
+        position: fixed !important;
+        top: 3.5rem !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        width: 14rem !important;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 50 !important;
+      }
+      #mainSidebar.sidebar-open {
+        transform: translateX(0);
+      }
+
+      /* Overlay also starts below header */
+      .sidebar-overlay { top: 3.5rem; }
+
+      /* Reading pane slides in from right, below the header */
+      #readingPane {
+        position: fixed !important;
+        top: 3.5rem !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        z-index: 30 !important;
+        transform: translateX(100%);
+        transition: transform 0.25s ease;
+      }
+      #readingPane.mobile-open { transform: translateX(0); }
+
+      /* Compose modal full screen */
+      .compose-modal.open { align-items: stretch; padding: 0; }
+      .compose-modal.open > div { max-width: 100%; border-radius: 0; height: 100%; }
+
+      /* Header: shrink logo area, hide gear button */
+      header .w-52 { width: auto !important; }
+      #quickSettingsWrapper { display: none !important; }
+
+      /* Search field: hide text label, keep icon */
+      #searchFieldLabel { display: none; }
+
+      /* Contacts view: stack vertically (list on top, detail below) */
+      #view-contacts.view.active { flex-direction: column !important; }
+      #view-contacts aside { width: 100% !important; flex-shrink: 0; max-height: 45vh; overflow-y: auto; border-right: none !important; border-bottom: 1px solid #e2e8f0; }
+      #contactPanel { flex: 1 1 auto !important; min-height: 0 !important; overflow-y: auto !important; }
+
+      /* Other full-page views: single column, scrollable */
+      #view-folders.view.active,
+      #view-tools.view.active,
+      #view-options.view.active,
+      #view-filters.view.active { flex-direction: column !important; overflow-y: auto !important; }
+
+      /* Prevent iOS from zooming on input focus */
+      input, select, textarea { font-size: 16px !important; }
+
+      /* Compact email items — fit more on screen */
+      .email-item { min-height: 0 !important; padding-top: 7px !important; padding-bottom: 7px !important; }
+      .email-item .text-xs { font-size: 11px !important; }
+      .email-item .text-sm { font-size: 12px !important; }
+      .sidebar-item { min-height: 36px; }
+
+      /* Slightly shorter nav bar */
+      .nav-tab { padding-top: 4px !important; padding-bottom: 4px !important; }
+
+      /* Shorter email list header and sort bar */
+      #emailListPane .border-b { padding-top: 6px !important; padding-bottom: 6px !important; }
+
+      /* Reading pane: tighter padding */
+      #emailContent .px-6 { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+
+      /* ── Fix header overflow on small screens ── */
+      /* Prevent page from being wider than viewport */
+      html, body { max-width: 100vw; overflow-x: hidden; }
+
+      /* Compact header gaps and padding */
+      header { padding-left: 8px !important; padding-right: 8px !important; gap: 6px !important; }
+
+      /* Hide logo text — keep only the icon */
+      #headerLogoText { display: none !important; }
+
+      /* Compact right-side icon group */
+      header .ml-auto { gap: 6px !important; }
+
+      /* Search options button: compact (icon + chevron only, no label text) */
+      #searchMenuBtn { padding-left: 8px !important; padding-right: 8px !important; }
+
+      /* Smaller search input text */
+      #searchInput { font-size: 12px !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 h-screen flex flex-col overflow-hidden">
+
+<!-- Top Bar -->
+<header class="bg-uni-800 text-white h-14 flex items-center px-4 gap-4 flex-shrink-0 shadow-md z-20">
+  <!-- Hamburger (mobile only) -->
+  <button onclick="toggleSidebar()" class="md:hidden p-2 hover:bg-uni-700 rounded-lg transition mr-1 flex-shrink-0">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+
+  <div class="flex items-center gap-2 w-52 flex-shrink-0">
+    <!-- University logo placeholder -->
+    <div class="w-8 h-8 bg-white rounded-full flex items-center justify-center flex-shrink-0">
+      <svg class="w-5 h-5 text-uni-800" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/>
+      </svg>
+    </div>
+    <span id="headerLogoText" class="font-bold text-lg tracking-tight">UniMail</span>
+  </div>
+
+  <!-- Search -->
+  <div class="flex-1 max-w-2xl relative flex items-center">
+    <!-- Search field filter button -->
+    <div class="relative">
+      <button onclick="toggleSearchMenu()" id="searchMenuBtn" class="flex items-center gap-1.5 bg-uni-700 hover:bg-uni-600 text-slate-300 hover:text-white rounded-l-lg px-3 py-2 text-xs font-medium border-r border-uni-600 transition h-full" title="Πεδίο αναζήτησης">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
+        <span id="searchFieldLabel">Αποστολέας</span>
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <!-- Dropdown -->
+      <div id="searchMenu" class="hidden absolute left-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 z-50 py-1 min-w-36">
+        <p class="text-xs text-slate-400 px-3 py-1.5 font-semibold uppercase tracking-wider">Αναζήτηση σε</p>
+        <button onclick="setSearchField('from','Αποστολέας')"    class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-uni-50 hover:text-uni-700 transition flex items-center gap-2"><span id="sf-from"    class="w-2 h-2 rounded-full bg-uni-600"></span>Αποστολέας</button>
+        <button onclick="setSearchField('subject','Θέμα')"       class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-uni-50 hover:text-uni-700 transition flex items-center gap-2"><span id="sf-subject" class="w-2 h-2 rounded-full"></span>Θέμα</button>
+        <button onclick="setSearchField('body','Κείμενο')"       class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-uni-50 hover:text-uni-700 transition flex items-center gap-2"><span id="sf-body"    class="w-2 h-2 rounded-full"></span>Κείμενο</button>
+        <button onclick="setSearchField('to','Προς')"            class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-uni-50 hover:text-uni-700 transition flex items-center gap-2"><span id="sf-to"      class="w-2 h-2 rounded-full"></span>Προς</button>
+        <button onclick="setSearchField('cc','Κοινοπ.')"         class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-uni-50 hover:text-uni-700 transition flex items-center gap-2"><span id="sf-cc"      class="w-2 h-2 rounded-full"></span>Κοινοπ.</button>
+        <button onclick="setSearchField('all','Παντού')"         class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-uni-50 hover:text-uni-700 transition flex items-center gap-2"><span id="sf-all"     class="w-2 h-2 rounded-full"></span>Παντού</button>
+      </div>
+    </div>
+    <!-- Search input -->
+    <div class="relative flex-1">
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+      </svg>
+      <input
+        id="searchInput"
+        type="text"
+        placeholder="Αναζήτηση αλληλογραφίας..."
+        oninput="handleSearch(this.value)"
+        class="w-full bg-uni-700 text-white placeholder-slate-300 rounded-r-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-uni-300 focus:bg-uni-600 transition"
+      />
+    </div>
+  </div>
+
+  <!-- User avatar -->
+  <div class="ml-auto flex items-center gap-3">
+    <div class="relative">
+      <button onclick="toggleNotifPanel()" class="relative p-2 hover:bg-uni-700 rounded-full transition" title="Ειδοποιήσεις">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+        </svg>
+        <span id="notifBadge" class="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center">4</span>
+      </button>
+      <!-- Notifications panel -->
+      <div id="notifPanel" class="hidden absolute right-0 top-11 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+          <h3 class="font-semibold text-slate-800 text-sm">Μη Αναγνωσμένα</h3>
+          <span id="notifPanelCount" class="text-xs text-slate-400"></span>
+        </div>
+        <div id="notifList" class="max-h-96 overflow-y-auto divide-y divide-slate-50"></div>
+        <div class="px-4 py-2.5 border-t border-slate-100 text-center">
+          <button onclick="showUnreadOnly()" class="text-xs text-uni-600 hover:underline">Εμφάνιση μόνο μη αναγνωσμένων</button>
+        </div>
+      </div>
+    </div>
+    <div class="relative" id="quickSettingsWrapper">
+      <button onclick="toggleQuickSettings()" class="p-2 hover:bg-uni-700 rounded-full transition" title="Γρήγορες Ρυθμίσεις">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </button>
+      <!-- Quick settings panel -->
+      <div id="quickSettingsPanel" class="hidden absolute right-0 top-11 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-100 bg-slate-50">
+          <h3 class="font-semibold text-slate-800 text-sm">Γρήγορες Ρυθμίσεις</h3>
+        </div>
+        <div class="px-4 py-3 flex flex-col gap-4">
+
+          <!-- Messages per page -->
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1.5">Μηνύματα ανά σελίδα</label>
+            <div class="flex gap-2">
+              <button onclick="setPageSize(15)" id="psize-15" class="flex-1 py-1.5 rounded-lg border text-xs font-medium transition">15</button>
+              <button onclick="setPageSize(20)" id="psize-20" class="flex-1 py-1.5 rounded-lg border text-xs font-medium transition">20</button>
+              <button onclick="setPageSize(30)" id="psize-30" class="flex-1 py-1.5 rounded-lg border text-xs font-medium transition">30</button>
+              <button onclick="setPageSize(50)" id="psize-50" class="flex-1 py-1.5 rounded-lg border text-xs font-medium transition">50</button>
+            </div>
+          </div>
+
+          <!-- Toggles -->
+          <div class="flex flex-col gap-3">
+            <label class="flex items-center justify-between cursor-pointer gap-3">
+              <span class="text-sm text-slate-700">Αποκλεισμός εξωτερικών εικόνων</span>
+              <button onclick="toggleQS('blockimages')" id="qs-blockimages" class="relative w-10 h-5 rounded-full transition-colors bg-uni-600 flex-shrink-0">
+                <span class="absolute top-0.5 right-0.5 w-4 h-4 bg-white rounded-full shadow transition-all"></span>
+              </button>
+            </label>
+            <label class="flex items-center justify-between cursor-pointer gap-3">
+              <span class="text-sm text-slate-700">Εμφάνιση HTML μηνυμάτων</span>
+              <button onclick="toggleQS('htmlmail')" id="qs-htmlmail" class="relative w-10 h-5 rounded-full transition-colors bg-uni-600 flex-shrink-0">
+                <span class="absolute top-0.5 right-0.5 w-4 h-4 bg-white rounded-full shadow transition-all"></span>
+              </button>
+            </label>
+          </div>
+
+          <!-- Timezone -->
+          <div>
+            <label class="text-xs font-semibold text-slate-500 block mb-1.5">Ζώνη Ώρας</label>
+            <select onchange="quickSettingChanged()" id="qs-tz" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400" style="background:white; color:#334155">
+              <option value="Europe/Athens" selected>Αθήνα (UTC+2/+3)</option>
+              <option value="UTC">UTC</option>
+              <option value="Europe/London">Λονδίνο (UTC+0/+1)</option>
+            </select>
+          </div>
+
+        </div>
+        <div class="px-4 py-2.5 border-t border-slate-100">
+          <button onclick="toggleQuickSettings(); switchView('options')" class="text-xs text-uni-600 hover:underline flex items-center gap-1">
+            Πλήρεις Επιλογές
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="relative">
+      <div onclick="toggleProfileMenu()" class="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center text-uni-900 font-bold text-sm cursor-pointer select-none" title="Alex Johnson">AJ</div>
+      <!-- Profile dropdown -->
+      <div id="profileMenu" class="hidden absolute right-0 top-11 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden">
+        <!-- User info header -->
+        <div class="flex items-center gap-3 px-4 py-3 bg-slate-50 border-b border-slate-100">
+          <div class="w-10 h-10 rounded-full bg-amber-400 flex items-center justify-center text-uni-900 font-bold text-sm flex-shrink-0">AJ</div>
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-slate-800 truncate">Alex Johnson</p>
+            <p class="text-xs text-slate-500 truncate">a.johnson@student.university.edu</p>
+          </div>
+        </div>
+        <!-- Menu items -->
+        <div class="py-1">
+          <button onclick="profileAction('options')" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition text-left">
+            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0M12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            Προσωπικές Πληροφορίες
+          </button>
+          <button onclick="profileAction('options')" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition text-left">
+            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            Ρυθμίσεις & Επιλογές
+          </button>
+          <button onclick="profileAction('password')" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition text-left">
+            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+            Αλλαγή Κωδικού
+          </button>
+        </div>
+        <div class="border-t border-slate-100 py-1">
+          <button onclick="profileAction('logout')" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition text-left">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+            Αποσύνδεση
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Navigation Tab Bar -->
+<nav class="bg-uni-900 border-b border-uni-800 flex items-end px-4 flex-shrink-0 z-10">
+  <button class="nav-tab active" id="tab-inbox" onclick="switchView('inbox')">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+    <span class="nav-label">Αλληλογραφία</span>
+  </button>
+  <button class="nav-tab" id="tab-contacts" onclick="switchView('contacts')">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+    <span class="nav-label">Επαφές</span>
+  </button>
+  <button class="nav-tab" id="tab-folders" onclick="switchView('folders')">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+    <span class="nav-label">Φάκελοι</span>
+  </button>
+  <button class="nav-tab" id="tab-tools" onclick="switchView('tools')">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+    <span class="nav-label">Εργαλεία</span>
+  </button>
+  <button class="nav-tab" id="tab-options" onclick="switchView('options')">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+    <span class="nav-label">Επιλογές</span>
+  </button>
+  <button class="nav-tab" id="tab-filters" onclick="switchView('filters')">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+    <span class="nav-label">Φίλτρα</span>
+  </button>
+</nav>
+
+<!-- Views wrapper -->
+<div style="display:flex; flex-direction:column; flex:1 1 auto; min-height:0; overflow:hidden">
+
+<!-- VIEW: Inbox (Αλληλογραφία) -->
+<div id="view-inbox" class="view active" style="overflow:hidden">
+
+  <!-- Sidebar overlay (mobile) -->
+  <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+  <!-- Sidebar -->
+  <aside id="mainSidebar" class="w-56 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 overflow-y-auto md:relative">
+    <!-- Compose -->
+    <div class="p-3">
+      <button
+        onclick="openCompose()"
+        class="w-full bg-uni-600 hover:bg-uni-700 text-white rounded-xl py-2.5 px-4 text-sm font-semibold flex items-center gap-2 justify-center transition shadow-sm"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+        </svg>
+        Σύνθεση
+      </button>
+    </div>
+
+    <!-- Folders -->
+    <nav class="flex flex-col gap-0.5 px-2 pb-2">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2 pt-2 pb-1">Φάκελοι</p>
+
+      <button class="sidebar-item active flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition w-full text-left" onclick="switchFolder('inbox', this)">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+        <span class="flex-1">Εισερχόμενα</span>
+        <span id="badge-inbox" class="badge bg-uni-600 text-white rounded-full flex items-center justify-center font-bold px-1">4</span>
+      </button>
+
+      <button class="sidebar-item flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-slate-700 transition w-full text-left" onclick="switchFolder('starred', this)">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+        <span class="flex-1">Με αστέρι</span>
+      </button>
+
+      <button class="sidebar-item flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-slate-700 transition w-full text-left" onclick="switchFolder('sent', this)">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+        <span class="flex-1">Απεσταλμένα</span>
+      </button>
+
+      <button class="sidebar-item flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-slate-700 transition w-full text-left" onclick="switchFolder('drafts', this)">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+        <span class="flex-1">Πρόχειρα</span>
+        <span class="badge bg-slate-200 text-slate-600 rounded-full flex items-center justify-center font-semibold px-1">2</span>
+      </button>
+
+      <button class="sidebar-item flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-slate-700 transition w-full text-left" onclick="switchFolder('junk', this)">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+        <span class="flex-1">Ανεπιθύμητα</span>
+        <span class="badge bg-orange-100 text-orange-600 rounded-full flex items-center justify-center font-semibold px-1">1</span>
+      </button>
+
+      <button class="sidebar-item flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-slate-700 transition w-full text-left" onclick="switchFolder('trash', this)">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        <span class="flex-1">Κάδος</span>
+      </button>
+    </nav>
+
+    <!-- Labels -->
+    <nav class="flex flex-col gap-0.5 px-2 pb-4 border-t border-slate-100 mt-1">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2 pt-3 pb-1">Ετικέτες</p>
+
+      <button class="sidebar-item flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-slate-700 transition w-full text-left" onclick="switchFolder('label-coursework', this)">
+        <span class="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0"></span>
+        <span>Εργασίες</span>
+      </button>
+      <button class="sidebar-item flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-slate-700 transition w-full text-left" onclick="switchFolder('label-admin', this)">
+        <span class="w-3 h-3 rounded-full bg-purple-500 flex-shrink-0"></span>
+        <span>Διοίκηση</span>
+      </button>
+      <button class="sidebar-item flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-slate-700 transition w-full text-left" onclick="switchFolder('label-clubs', this)">
+        <span class="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></span>
+        <span>Σύλλογοι</span>
+      </button>
+      <button class="sidebar-item flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-slate-700 transition w-full text-left" onclick="switchFolder('label-research', this)">
+        <span class="w-3 h-3 rounded-full bg-amber-500 flex-shrink-0"></span>
+        <span>Έρευνα</span>
+      </button>
+
+      <button onclick="promptNewLabel()" class="flex items-center gap-2 text-xs text-slate-400 hover:text-slate-600 px-2 py-1.5 mt-1 transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Προσθήκη ετικέτας
+      </button>
+    </nav>
+
+    <!-- Storage -->
+    <div class="mt-auto p-3 border-t border-slate-100">
+      <p class="text-xs text-slate-400 mb-1.5">Αποθηκευτικός χώρος</p>
+      <div class="w-full bg-slate-200 rounded-full h-1.5">
+        <div class="bg-uni-600 h-1.5 rounded-full" style="width: 34%"></div>
+      </div>
+      <p class="text-xs text-slate-400 mt-1">3,4 GB από 10 GB χρησιμοποιούνται</p>
+    </div>
+  </aside>
+
+  <!-- Email List -->
+  <div id="emailListPane" class="w-full md:w-80 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 overflow-hidden">
+    <!-- List header -->
+    <div class="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100">
+      <!-- Select-all checkbox -->
+      <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)"
+        class="w-4 h-4 rounded border-slate-300 text-uni-600 cursor-pointer flex-shrink-0" title="Επιλογή όλων">
+      <h2 id="folderTitle" class="font-semibold text-slate-800 flex-1 text-sm">Εισερχόμενα</h2>
+      <button onclick="refreshList()" class="p-1.5 hover:bg-slate-100 rounded-lg transition" title="Ανανέωση">
+        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      </button>
+    </div>
+
+    <!-- Sort bar -->
+    <div class="flex items-center gap-0 px-3 py-1.5 border-b border-slate-100 bg-slate-50 text-xs text-slate-500">
+      <span class="flex-1 pl-7">
+        <button onclick="setSort('from')" class="hover:text-uni-700 font-medium transition flex items-center gap-0.5" id="sort-from">
+          Από <span id="sort-from-icon"></span>
+        </button>
+      </span>
+      <button onclick="setSort('date')" class="hover:text-uni-700 font-medium transition flex items-center gap-0.5 w-16 justify-end" id="sort-date">
+        Ημερ. <span id="sort-date-icon">↓</span>
+      </button>
+    </div>
+
+    <!-- Bulk action bar (hidden by default) -->
+    <div id="bulkBar" class="hidden items-center gap-1 px-3 py-2 border-b border-slate-200 bg-uni-50 flex-shrink-0">
+      <span id="bulkCount" class="text-xs font-semibold text-uni-700 flex-1"></span>
+      <button onclick="bulkMarkRead()" class="text-xs px-2 py-1 rounded hover:bg-uni-100 text-uni-700 transition" title="Σήμανση ως αναγνωσμένα">Αναγν.</button>
+      <button onclick="bulkMarkUnread()" class="text-xs px-2 py-1 rounded hover:bg-uni-100 text-uni-700 transition" title="Σήμανση ως μη αναγνωσμένα">Μη αναγν.</button>
+      <button onclick="bulkDelete()" class="text-xs px-2 py-1 rounded hover:bg-red-100 text-red-600 transition">Διαγραφή</button>
+      <button onclick="bulkSpam()" class="text-xs px-2 py-1 rounded hover:bg-orange-100 text-orange-600 transition">Spam</button>
+    </div>
+
+    <!-- Email items -->
+    <div id="emailList" class="flex-1 overflow-y-auto">
+      <!-- Populated by JS -->
+    </div>
+
+    <!-- Pagination bar -->
+    <div id="paginationBar" class="flex items-center justify-between px-3 py-2 border-t border-slate-100 bg-slate-50 flex-shrink-0 text-xs text-slate-500">
+      <span id="pageInfo"></span>
+      <div class="flex items-center gap-1">
+        <button onclick="goPage(1)" id="pageFirst" class="p-1 rounded hover:bg-slate-200 disabled:opacity-30 transition" title="Πρώτη">«</button>
+        <button onclick="goPage(currentPage-1)" id="pagePrev" class="p-1 rounded hover:bg-slate-200 disabled:opacity-30 transition" title="Προηγούμενη">‹</button>
+        <button onclick="goPage(currentPage+1)" id="pageNext" class="p-1 rounded hover:bg-slate-200 disabled:opacity-30 transition" title="Επόμενη">›</button>
+        <button onclick="goPage(totalPages())" id="pageLast" class="p-1 rounded hover:bg-slate-200 disabled:opacity-30 transition" title="Τελευταία">»</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reading Pane -->
+  <div id="readingPane" class="flex-1 flex flex-col overflow-hidden bg-white">
+    <!-- Empty state -->
+    <div id="emptyState" class="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
+      <svg class="w-16 h-16 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+      </svg>
+      <p class="text-sm">Επιλέξτε ένα μήνυμα για ανάγνωση</p>
+    </div>
+
+    <!-- Email content (hidden by default) -->
+    <div id="emailContent" class="flex-1 flex flex-col overflow-hidden hidden">
+      <!-- Email toolbar -->
+      <div class="flex items-center gap-1 px-3 md:px-6 py-3 border-b border-slate-100 flex-shrink-0">
+        <!-- Mobile back button -->
+        <button onclick="closeMobileReading()" class="md:hidden flex items-center gap-1 text-xs text-uni-600 font-semibold mr-2 flex-shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+          Πίσω
+        </button>
+        <button onclick="archiveEmail()" class="flex items-center gap-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg px-2.5 py-1.5 transition" title="Αρχειοθέτηση">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+          Αρχειοθέτηση
+        </button>
+        <button onclick="deleteEmail()" class="flex items-center gap-1.5 text-xs text-slate-600 hover:bg-red-50 hover:text-red-600 rounded-lg px-2.5 py-1.5 transition" title="Διαγραφή">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          Διαγραφή
+        </button>
+        <button onclick="markSpam()" class="flex items-center gap-1.5 text-xs text-slate-600 hover:bg-orange-50 hover:text-orange-600 rounded-lg px-2.5 py-1.5 transition" title="Ανεπιθύμητο">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          Ανεπιθύμητο
+        </button>
+        <div class="flex-1"></div>
+        <button onclick="toggleStar()" id="starBtn" class="p-1.5 hover:bg-slate-100 rounded-lg transition" title="Αστέρι">
+          <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+        </button>
+        <button onclick="openCompose('reply')" class="flex items-center gap-1.5 text-xs text-white bg-uni-600 hover:bg-uni-700 rounded-lg px-3 py-1.5 transition font-medium">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+          Απάντηση
+        </button>
+        <button onclick="openCompose('forward')" class="flex items-center gap-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg px-2.5 py-1.5 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10H11a8 8 0 00-8 8v2m18-10l-6-6m6 6l-6 6"/></svg>
+          Προώθηση
+        </button>
+      </div>
+
+      <!-- Email header -->
+      <div class="px-6 py-4 border-b border-slate-100 flex-shrink-0">
+        <div class="flex items-start justify-between gap-4 mb-3">
+          <h1 id="emailSubject" class="text-lg font-bold text-slate-900 leading-snug"></h1>
+          <span id="emailDate" class="text-xs text-slate-400 flex-shrink-0 mt-1"></span>
+        </div>
+        <div class="flex items-center gap-3">
+          <div id="avatarLarge" class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span id="emailFrom" class="font-semibold text-sm text-slate-800"></span>
+              <span id="emailFromAddr" class="text-xs text-slate-400"></span>
+            </div>
+            <div class="text-xs text-slate-400 mt-0.5">Προς: <span id="emailTo">εγώ</span></div>
+          </div>
+          <div id="emailTags" class="flex gap-1 flex-wrap justify-end"></div>
+        </div>
+      </div>
+
+      <!-- Email body -->
+      <div id="emailBody" class="flex-1 overflow-y-auto px-6 py-5 text-sm text-slate-700 leading-relaxed whitespace-pre-line"></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end view-inbox -->
+
+<!-- VIEW: Contacts (Επαφές) -->
+<div id="view-contacts" class="view" style="overflow:hidden">
+
+  <!-- Contacts sidebar -->
+  <aside class="w-64 bg-white border-r border-slate-200 flex flex-col flex-shrink-0">
+    <div class="p-3 border-b border-slate-100 flex flex-col gap-2">
+      <h2 class="font-semibold text-slate-800 text-sm">Προσωπικό Βιβλίο Διευθύνσεων</h2>
+      <button onclick="openContactForm(null)" class="w-full bg-uni-600 hover:bg-uni-700 text-white rounded-lg py-2 text-xs font-semibold flex items-center gap-2 justify-center transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+        Προσθήκη Επαφής
+      </button>
+      <label class="w-full border border-dashed border-slate-300 hover:border-uni-400 rounded-lg py-1.5 text-xs text-slate-500 flex items-center gap-2 justify-center cursor-pointer transition hover:text-uni-600">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+        Εισαγωγή CSV
+        <input type="file" accept=".csv" class="hidden" onchange="importCsv(this)">
+      </label>
+    </div>
+    <!-- Search contacts -->
+    <div class="px-3 py-2 border-b border-slate-100">
+      <input type="text" id="contactSearch" oninput="renderContactList()" placeholder="Αναζήτηση επαφών…"
+        class="w-full text-xs border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:ring-1 focus:ring-uni-400 placeholder-slate-400">
+    </div>
+    <!-- Contact list -->
+    <div id="contactList" class="flex-1 overflow-y-auto"></div>
+  </aside>
+
+  <!-- Contact detail / form panel -->
+  <div id="contactPanel" class="flex-1 overflow-y-auto bg-slate-50 flex flex-col">
+    <!-- Empty state -->
+    <div id="contactEmpty" class="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
+      <svg class="w-14 h-14 opacity-25" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      <p class="text-sm">Επιλέξτε επαφή ή προσθέστε νέα</p>
+      <p class="text-xs text-slate-300 max-w-xs text-center">Έχετε ήδη βιβλίο διευθύνσεων; Εισαγάγετέ το σε μορφή CSV χρησιμοποιώντας το κουμπί αριστερά.</p>
+    </div>
+
+    <!-- Contact form -->
+    <div id="contactForm" class="hidden p-6 max-w-3xl mx-auto w-full">
+      <div class="flex items-center justify-between mb-5">
+        <h3 id="contactFormTitle" class="text-base font-bold text-slate-800">Νέα Επαφή</h3>
+        <button onclick="closeContactForm()" class="text-xs text-slate-400 hover:text-slate-600 transition">✕ Κλείσιμο</button>
+      </div>
+      <input type="hidden" id="contactId">
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Κύριες Πληροφορίες -->
+        <section class="bg-white rounded-xl border border-slate-200 p-4">
+          <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Κύριες Πληροφορίες</h4>
+          <div class="flex flex-col gap-3">
+            <div><label class="text-xs text-slate-500 block mb-1">Όνομα</label><input id="cf-firstname" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+            <div><label class="text-xs text-slate-500 block mb-1">Επώνυμο</label><input id="cf-lastname" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+            <div><label class="text-xs text-slate-500 block mb-1">Ψευδώνυμο</label><input id="cf-nickname" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+          </div>
+        </section>
+
+        <!-- Πληροφορίες Επικοινωνίας -->
+        <section class="bg-white rounded-xl border border-slate-200 p-4">
+          <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Πληροφορίες Επικοινωνίας</h4>
+          <div class="flex flex-col gap-3">
+            <div><label class="text-xs text-slate-500 block mb-1">Διεύθυνση Email</label><input id="cf-email" type="email" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+            <div><label class="text-xs text-slate-500 block mb-1">Τηλέφωνο</label><input id="cf-phone" type="tel" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+            <div><label class="text-xs text-slate-500 block mb-1">Κινητό Τηλέφωνο</label><input id="cf-mobile" type="tel" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+            <div><label class="text-xs text-slate-500 block mb-1">Τηλεομοιότυπο (Fax)</label><input id="cf-fax" type="tel" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+            <div><label class="text-xs text-slate-500 block mb-1">Τηλέφωνο Οίκου</label><input id="cf-homephone" type="tel" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+          </div>
+        </section>
+
+        <!-- Πληροφορίες Εργασίας -->
+        <section class="bg-white rounded-xl border border-slate-200 p-4">
+          <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Πληροφορίες Εργασίας</h4>
+          <div class="flex flex-col gap-3">
+            <div><label class="text-xs text-slate-500 block mb-1">Οργανισμός</label><input id="cf-org" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+            <div><label class="text-xs text-slate-500 block mb-1">Οργανωτική Μονάδα</label><input id="cf-orgunit" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+            <div><label class="text-xs text-slate-500 block mb-1">Τίτλος</label><input id="cf-title" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+          </div>
+        </section>
+
+        <!-- Διεύθυνση -->
+        <section class="bg-white rounded-xl border border-slate-200 p-4">
+          <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Διεύθυνση</h4>
+          <div class="flex flex-col gap-3">
+            <div><label class="text-xs text-slate-500 block mb-1">Τοποθεσία (Πόλη)</label><input id="cf-city" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+            <div><label class="text-xs text-slate-500 block mb-1">Ταχυδρομική Διεύθυνση</label><input id="cf-street" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+            <div><label class="text-xs text-slate-500 block mb-1">Ταχυδρομικός Κώδικας</label><input id="cf-zip" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+            <div><label class="text-xs text-slate-500 block mb-1">Ταχυδρομική Θυρίδα</label><input id="cf-pobox" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+            <div><label class="text-xs text-slate-500 block mb-1">Διεύθυνση Οίκου</label><input id="cf-homeaddr" type="text" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+          </div>
+        </section>
+
+        <!-- Άλλα -->
+        <section class="bg-white rounded-xl border border-slate-200 p-4 md:col-span-2">
+          <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Άλλα</h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label class="text-xs text-slate-500 block mb-1">Περιγραφή</label><textarea id="cf-desc" rows="3" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400 resize-none"></textarea></div>
+            <div><label class="text-xs text-slate-500 block mb-1">Διεύθυνση Ιστοσελίδας</label><input id="cf-website" type="url" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Form actions -->
+      <div class="flex items-center gap-3 mt-5">
+        <button onclick="saveContact()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-5 py-2 text-sm font-semibold transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          Προσθήκη Νέας Επαφής
+        </button>
+        <button onclick="closeContactForm()" class="border border-red-200 text-red-500 hover:bg-red-50 rounded-lg px-4 py-2 text-sm font-semibold transition">Ακύρωση</button>
+        <button id="deleteContactBtn" onclick="deleteContact()" class="hidden ml-auto border border-red-200 text-red-500 hover:bg-red-50 rounded-lg px-4 py-2 text-sm font-semibold transition">Διαγραφή επαφής</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW: Folders (Φάκελοι) -->
+<div id="view-folders" class="view bg-slate-50" style="overflow-y:auto">
+  <div class="max-w-3xl mx-auto p-6 w-full">
+    <h2 class="text-lg font-bold text-slate-800 mb-6">Φάκελοι</h2>
+
+    <div class="flex flex-col gap-5">
+
+      <!-- Create folder -->
+      <section class="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 class="font-semibold text-slate-700 mb-4">Δημιουργία Φακέλου</h3>
+        <div class="flex flex-col sm:flex-row gap-3 items-end">
+          <div class="flex-1">
+            <label class="text-xs text-slate-500 block mb-1">Όνομα νέου φακέλου</label>
+            <input id="newFolderName" type="text" placeholder="π.χ. Εργασίες 2026"
+              class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+          </div>
+          <div class="flex-1">
+            <label class="text-xs text-slate-500 block mb-1">Ως υποφάκελος του</label>
+            <select id="newFolderParent" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-uni-400 bg-white">
+              <option value="">— Κανένας (ανώτατο επίπεδο) —</option>
+              <option value="inbox">Εισερχόμενα</option>
+              <option value="sent">Απεσταλμένα</option>
+              <option value="drafts">Πρόχειρα</option>
+            </select>
+          </div>
+          <button onclick="createFolder()" class="bg-uni-600 hover:bg-uni-700 text-white rounded-lg px-4 py-2 text-sm font-semibold transition flex-shrink-0">
+            Δημιουργία
+          </button>
+        </div>
+      </section>
+
+      <!-- Rename folder -->
+      <section class="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 class="font-semibold text-slate-700 mb-4">Μετονομασία Φακέλου</h3>
+        <div id="renameFolderList" class="flex flex-col gap-2"></div>
+      </section>
+
+      <!-- Delete folder -->
+      <section class="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 class="font-semibold text-slate-700 mb-4">Διαγραφή Φακέλου</h3>
+        <div id="deleteFolderList" class="flex flex-col gap-2"></div>
+      </section>
+
+      <!-- Shared / Public folders -->
+      <section class="bg-white rounded-xl border border-slate-200 p-5">
+        <div class="flex items-start gap-3 mb-3">
+          <div class="w-10 h-10 rounded-lg bg-uni-50 flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5 text-uni-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </div>
+          <div>
+            <h3 class="font-semibold text-slate-700">Κοινοί / Διαμοιραζόμενοι Φάκελοι</h3>
+            <p class="text-xs text-slate-500 mt-1">Μπορείτε να μοιραστείτε τους φακέλους σας με άλλους χρήστες ή να εγγραφείτε σε φακέλους άλλων. Προαιρετικά <button onclick="showSubscriptionsModal()" class="text-uni-600 underline hover:text-uni-800">εγγραφή ή ακύρωση εγγραφής από διαθέσιμους φακέλους σε αυτό το σύστημα.</button></p>
+          </div>
+        </div>
+        <div class="border-t border-slate-100 pt-4">
+          <div class="flex flex-col gap-2" id="sharedFolderList"></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- Subscriptions Modal -->
+<div id="subscriptionsModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 hidden">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 flex flex-col max-h-[85vh]">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <h2 class="font-bold text-slate-800 text-base">Συνδρομές Φακέλων</h2>
+      <button onclick="closeSubscriptionsModal()" class="text-slate-400 hover:text-slate-600 transition text-lg leading-none">✕</button>
+    </div>
+    <!-- Description -->
+    <div class="px-6 py-3 text-xs text-slate-500 border-b border-slate-100 leading-relaxed">
+      Αυτή η σελίδα σάς επιτρέπει να ρυθμίσετε τις συνδρομές σε φακέλους μηνυμάτων. Οι συνδρομές ορίζουν το ποιους φακέλους θα βλέπετε στην αριστερή λίστα φακέλων, ανάμεσα σε έναν αριθμό από διαθέσιμους φακέλους συστήματος, τμημάτων καθώς και φακέλους που μοιράζονται άλλοι μεμονωμένοι χρήστες. Οποιαδήποτε αλλαγή πραγματοποιείτε εδώ στις συνδρομές σας, θα έχει ισχύ και σε οποιοδήποτε άλλο πρόγραμμα χρησιμοποιείτε (π.χ. Thunderbird ή Outlook).
+    </div>
+    <!-- Tabs -->
+    <div class="grid grid-cols-4 border-b border-slate-100 flex-shrink-0">
+      <button onclick="switchSubTab('mine')" id="subtab-mine" class="subtab px-2 py-2.5 text-xs font-semibold border-b-2 border-uni-600 text-uni-700 bg-uni-50 text-center leading-tight">✓ Συνδρομές<br>Μου</button>
+      <button onclick="switchSubTab('personal')" id="subtab-personal" class="subtab px-2 py-2.5 text-xs font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-center leading-tight">Προσωπικοί<br>Φάκελοι</button>
+      <button onclick="switchSubTab('system')" id="subtab-system" class="subtab px-2 py-2.5 text-xs font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-center leading-tight">Φάκελοι<br>Συστήματος</button>
+      <button onclick="switchSubTab('users')" id="subtab-users" class="subtab px-2 py-2.5 text-xs font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 text-center leading-tight">Φάκελοι<br>Χρηστών</button>
+    </div>
+    <!-- Content -->
+    <div class="flex-1 overflow-y-auto px-6 py-4">
+      <p id="subTabNote" class="text-xs text-slate-500 mb-3">Είστε ήδη συνδρομητής στους ακόλουθους φακέλους. <strong>Επιλέξτε για να ακυρώσετε τη συνδρομή:</strong></p>
+      <div id="subFolderList" class="flex flex-col gap-0"></div>
+    </div>
+    <!-- Footer -->
+    <div class="px-6 py-3 border-t border-slate-100 flex justify-center">
+      <button id="subActionBtn" onclick="applySubscriptions()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg px-6 py-2 text-sm font-medium transition">Ακύρωση Συνδρομής</button>
+    </div>
+  </div>
+</div>
+
+    </div>
+  </div>
+</div>
+
+<!-- VIEW: Tools (Εργαλεία) -->
+<div id="view-tools" class="view bg-slate-50" style="overflow-y:auto">
+  <div class="max-w-3xl mx-auto p-6 w-full">
+    <h2 class="text-lg font-bold text-slate-800 mb-6">Εργαλεία</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <!-- 1. Directory -->
+      <div class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-uni-50 flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5 text-uni-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+          </div>
+          <div>
+            <h3 class="font-semibold text-slate-800 text-sm">Κατάλογος</h3>
+            <p class="text-xs text-slate-500">Υπηρεσία Καταλόγου</p>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 leading-relaxed">Αναζητήστε χρήστες στον κατάλογο του Πανεπιστημίου Αθηνών (LDAP). Βρείτε email, τηλέφωνο και στοιχεία επικοινωνίας συναδέλφων και μελών ΔΕΠ.</p>
+        <div class="flex gap-2 mt-auto pt-1">
+          <input id="dirSearchInput" type="text" placeholder="Αναζήτηση ονόματος…" class="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+          <button onclick="searchDirectory()" class="bg-uni-600 hover:bg-uni-700 text-white rounded-lg px-3 py-1.5 text-sm font-medium transition">Αναζήτηση</button>
+        </div>
+        <div id="dirResults" class="hidden text-xs text-slate-600 bg-slate-50 rounded-lg p-3 leading-relaxed"></div>
+      </div>
+
+      <!-- 2. Address Book import/export/backup -->
+      <div class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </div>
+          <div>
+            <h3 class="font-semibold text-slate-800 text-sm">Εργαλεία Προσωπικού Βιβλίου Διευθύνσεων</h3>
+            <p class="text-xs text-slate-500">Εισαγωγή, Εξαγωγή και Αντίγραφα Ασφαλείας</p>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 leading-relaxed">Διαχειριστείτε το βιβλίο επαφών σας. Εισαγάγετε επαφές από CSV, εξαγάγετε σε CSV ή δημιουργήστε αντίγραφο ασφαλείας.</p>
+        <div class="flex flex-col gap-2 mt-auto pt-1">
+          <label class="flex items-center gap-2 border border-dashed border-slate-300 hover:border-emerald-400 rounded-lg py-2 px-3 text-xs text-slate-500 cursor-pointer hover:text-emerald-600 transition justify-center">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+            Εισαγωγή από CSV
+            <input type="file" accept=".csv" class="hidden" onchange="importCsv(this)">
+          </label>
+          <button onclick="exportContacts('csv')" class="flex items-center gap-2 justify-center border border-slate-200 hover:bg-slate-50 rounded-lg py-2 px-3 text-xs text-slate-600 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            Εξαγωγή σε CSV
+          </button>
+          <button onclick="exportContacts('backup')" class="flex items-center gap-2 justify-center border border-slate-200 hover:bg-slate-50 rounded-lg py-2 px-3 text-xs text-slate-600 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+            Αντίγραφο Ασφαλείας
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. POP3 download -->
+      <div class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
+          </div>
+          <div>
+            <h3 class="font-semibold text-slate-800 text-sm">Λήψη POP3 Ταχυδρομείου</h3>
+            <p class="text-xs text-slate-500">Λήψη POP3 Ταχυδρομείου</p>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 leading-relaxed">Κατεβάστε αλληλογραφία από εξωτερικό λογαριασμό POP3 απευθείας στα Εισερχόμενά σας.</p>
+        <div class="flex flex-col gap-2 mt-auto pt-1">
+          <input id="pop3Host" type="text" placeholder="mail.example.com" class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+          <div class="flex gap-2">
+            <input id="pop3User" type="text" placeholder="Όνομα χρήστη" class="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+            <input id="pop3Pass" type="password" placeholder="Κωδικός" class="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+          </div>
+          <button onclick="fetchPop3()" class="bg-amber-500 hover:bg-amber-600 text-white rounded-lg px-4 py-1.5 text-sm font-medium transition">Λήψη Αλληλογραφίας</button>
+        </div>
+      </div>
+
+      <!-- 4. Change password -->
+      <div class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+          </div>
+          <div>
+            <h3 class="font-semibold text-slate-800 text-sm">Αλλαγή Μυστικού Κωδικού</h3>
+            <p class="text-xs text-slate-500">Για όλες τις υπηρεσίες</p>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 leading-relaxed">Αλλάξτε τον κωδικό πρόσβασής σας. Η αλλαγή ισχύει για όλες τις υπηρεσίες του Πανεπιστημίου που χρησιμοποιούν τον ίδιο λογαριασμό.</p>
+        <div class="flex flex-col gap-2 mt-auto pt-1">
+          <input id="passOld" type="password" placeholder="Τρέχων κωδικός" class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+          <input id="passNew" type="password" placeholder="Νέος κωδικός" class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+          <input id="passConfirm" type="password" placeholder="Επιβεβαίωση νέου κωδικού" class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+          <button onclick="changePassword()" class="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-1.5 text-sm font-medium transition">Αλλαγή Κωδικού</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- VIEW: Options (Επιλογές) -->
+<div id="view-options" class="view bg-slate-50" style="overflow-y:auto">
+  <div class="max-w-3xl mx-auto p-6 w-full">
+    <div class="flex items-center justify-between mb-6">
+      <h2 class="text-lg font-bold text-slate-800">Επιλογές</h2>
+      <button onclick="saveOptions()" class="bg-uni-600 hover:bg-uni-700 text-white rounded-lg px-5 py-2 text-sm font-semibold transition">Αποθήκευση Αλλαγών</button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <!-- Προσωπικές Πληροφορίες -->
+      <section class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
+        <div class="flex items-center gap-2 mb-1">
+          <svg class="w-4 h-4 text-uni-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0M12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+          <h3 class="font-semibold text-slate-700 text-sm">Προσωπικές Πληροφορίες</h3>
+        </div>
+        <p class="text-xs text-slate-500">Περιέχει προσωπικά στοιχεία για εσάς όπως το όνομά σας, η ηλεκτρονική σας διεύθυνση και η ηλεκτρονική υπογραφή σας.</p>
+        <div class="flex flex-col gap-2 mt-1">
+          <div><label class="text-xs text-slate-500 block mb-1">Εμφανιζόμενο Όνομα</label>
+            <input id="opt-displayname" type="text" value="Alex Johnson" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+          <div><label class="text-xs text-slate-500 block mb-1">Διεύθυνση Email</label>
+            <input id="opt-email" type="email" value="a.johnson@student.university.edu" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400"></div>
+          <div><label class="text-xs text-slate-500 block mb-1">Υπογραφή Email</label>
+            <textarea id="opt-signature" rows="3" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400 resize-none" placeholder="π.χ. Με εκτίμηση, Alex Johnson">Alex Johnson
+MSc Computer Science, Year 1</textarea></div>
+        </div>
+      </section>
+
+      <!-- Προτιμήσεις Εμφάνισης -->
+      <section class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
+        <div class="flex items-center gap-2 mb-1">
+          <svg class="w-4 h-4 text-uni-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
+          <h3 class="font-semibold text-slate-700 text-sm">Προτιμήσεις Εμφάνισης</h3>
+        </div>
+        <p class="text-xs text-slate-500">Μπορείτε να αλλάξετε τον τρόπο εμφάνισης του UniMail και τους χρωματικούς κωδικούς.</p>
+        <div class="flex flex-col gap-3 mt-1">
+          <div><label class="text-xs text-slate-500 block mb-1">Γλώσσα</label>
+            <select id="opt-lang" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400 bg-white">
+              <option value="el" selected>Ελληνικά</option>
+              <option value="en">English</option>
+            </select></div>
+          <div><label class="text-xs text-slate-500 block mb-1">Ζώνη Ώρας</label>
+            <select id="opt-tz" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400 bg-white">
+              <option value="Europe/Athens" selected>Αθήνα (UTC+2/+3)</option>
+              <option value="UTC">UTC</option>
+              <option value="Europe/London">Λονδίνο (UTC+0/+1)</option>
+            </select></div>
+          <div><label class="text-xs text-slate-500 block mb-1">Μηνύματα ανά σελίδα</label>
+            <select id="opt-perpage" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400 bg-white">
+              <option value="15">15</option>
+              <option value="20" selected>20</option>
+              <option value="30">30</option>
+              <option value="50">50</option>
+            </select></div>
+        </div>
+      </section>
+
+      <!-- Μορφοποίηση Μηνυμάτων -->
+      <section class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
+        <div class="flex items-center gap-2 mb-1">
+          <svg class="w-4 h-4 text-uni-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16"/></svg>
+          <h3 class="font-semibold text-slate-700 text-sm">Μορφοποίηση Μηνυμάτων</h3>
+        </div>
+        <p class="text-xs text-slate-500">Με τις διπλά διαβαθμισμένα μηνύματα, τα εισερχόμενα μηνύματα μπορούν να έχουν διαφορετικά χρώματα.</p>
+        <div class="flex flex-col gap-3 mt-1">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="opt-htmlmail" checked class="w-4 h-4 rounded border-slate-300 text-uni-600">
+            <span class="text-sm text-slate-700">Εμφάνιση μηνυμάτων HTML</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="opt-blockimages" checked class="w-4 h-4 rounded border-slate-300 text-uni-600">
+            <span class="text-sm text-slate-700">Αποκλεισμός εξωτερικών εικόνων</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="opt-replyquote" checked class="w-4 h-4 rounded border-slate-300 text-uni-600">
+            <span class="text-sm text-slate-700">Παράθεση πρωτότυπου κατά την απάντηση</span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Σειρά Κατάλογου -->
+      <section class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
+        <div class="flex items-center gap-2 mb-1">
+          <svg class="w-4 h-4 text-uni-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/></svg>
+          <h3 class="font-semibold text-slate-700 text-sm">Σειρά Κατάλογου</h3>
+        </div>
+        <p class="text-xs text-slate-500">Με τις διπλά διαβαθμισμένες λίστες, τα ονόματα μπορούν να διατάσσονται κατά όνομα ή επώνυμο.</p>
+        <div class="flex flex-col gap-2 mt-1">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="radio" name="dirorder" id="opt-dir-last" value="last" checked class="w-4 h-4 border-slate-300 text-uni-600">
+            <span class="text-sm text-slate-700">Επώνυμο, Όνομα</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="radio" name="dirorder" id="opt-dir-first" value="first" class="w-4 h-4 border-slate-300 text-uni-600">
+            <span class="text-sm text-slate-700">Όνομα Επώνυμο</span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Επιλογή Φακέλου Ανεπιθύμητων -->
+      <section class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
+        <div class="flex items-center gap-2 mb-1">
+          <svg class="w-4 h-4 text-uni-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+          <h3 class="font-semibold text-slate-700 text-sm">Επιλογή Φακέλου Ανεπιθύμητων</h3>
+        </div>
+        <p class="text-xs text-slate-500">Το Φίλτρο Ανεπιθύμητων από τον εξυπηρετητή αλληλογραφίας θα αποθηκεύει τα SPAM μηνύματα σε αυτόν τον φάκελο.</p>
+        <div class="mt-1">
+          <label class="text-xs text-slate-500 block mb-1">Φάκελος Ανεπιθύμητων (Junk)</label>
+          <select id="opt-junkfolder" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400 bg-white">
+            <option value="junk" selected>Ανεπιθύμητα (INBOX.Junk)</option>
+            <option value="spam">Spam</option>
+            <option value="trash">Κάδος</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Προτιμήσεις Φακέλων -->
+      <section class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
+        <div class="flex items-center gap-2 mb-1">
+          <svg class="w-4 h-4 text-uni-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+          <h3 class="font-semibold text-slate-700 text-sm">Προτιμήσεις Φακέλων</h3>
+        </div>
+        <p class="text-xs text-slate-500">Καθορίστε τον τρόπο με τον οποίο γίνεται η εμφάνιση και η διαχείριση των φακέλων σας.</p>
+        <div class="flex flex-col gap-3 mt-1">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="opt-autoexpand" checked class="w-4 h-4 rounded border-slate-300 text-uni-600">
+            <span class="text-sm text-slate-700">Αυτόματη ανάπτυξη φακέλων</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="opt-showcount" checked class="w-4 h-4 rounded border-slate-300 text-uni-600">
+            <span class="text-sm text-slate-700">Εμφάνιση αριθμού μη αναγνωσμένων</span>
+          </label>
+          <div><label class="text-xs text-slate-500 block mb-1">Φάκελος αποστολής</label>
+            <select id="opt-sentfolder" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400 bg-white">
+              <option value="sent" selected>Απεσταλμένα</option>
+              <option value="none">Κανένας</option>
+            </select></div>
+          <div><label class="text-xs text-slate-500 block mb-1">Φάκελος προχείρων</label>
+            <select id="opt-draftfolder" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400 bg-white">
+              <option value="drafts" selected>Πρόχειρα</option>
+              <option value="none">Κανένας</option>
+            </select></div>
+        </div>
+      </section>
+
+      <!-- Ειδοποίηση Νέου Ταχυδρομείου -->
+      <section class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
+        <div class="flex items-center gap-2 mb-1">
+          <svg class="w-4 h-4 text-uni-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+          <h3 class="font-semibold text-slate-700 text-sm">Ειδοποίηση Νέου Ταχυδρομείου</h3>
+        </div>
+        <p class="text-xs text-slate-500">Ορίστε ρυθμίσεις για την εκτύπωση ήχου και την εμφάνιση παραθύρου όταν φθάνει νέο ταχυδρομείο.</p>
+        <div class="flex flex-col gap-3 mt-1">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="opt-notifysound" class="w-4 h-4 rounded border-slate-300 text-uni-600">
+            <span class="text-sm text-slate-700">Ήχος ειδοποίησης</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="opt-notifypopup" checked class="w-4 h-4 rounded border-slate-300 text-uni-600">
+            <span class="text-sm text-slate-700">Αναδυόμενη ειδοποίηση (toast)</span>
+          </label>
+          <div><label class="text-xs text-slate-500 block mb-1">Έλεγχος κάθε (λεπτά)</label>
+            <select id="opt-checkinterval" class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400 bg-white">
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="15">15</option>
+              <option value="30">30</option>
+            </select></div>
+        </div>
+      </section>
+
+      <!-- Σύνδεσμοι -->
+      <section class="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
+        <div class="flex items-center gap-2 mb-1">
+          <svg class="w-4 h-4 text-uni-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+          <h3 class="font-semibold text-slate-700 text-sm">Γρήγοροι Σύνδεσμοι</h3>
+        </div>
+        <div class="flex flex-col gap-2 mt-1">
+          <button onclick="switchView('filters')" class="text-left text-sm text-uni-600 hover:underline flex items-center gap-2 py-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+            Φίλτρα Μηνυμάτων
+          </button>
+          <button onclick="switchView('tools')" class="text-left text-sm text-uni-600 hover:underline flex items-center gap-2 py-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0M12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            Επεξεργασία Προφίλ στον Κατάλογο
+          </button>
+          <button onclick="switchView('tools')" class="text-left text-sm text-uni-600 hover:underline flex items-center gap-2 py-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
+            Λήψη POP3 Ταχυδρομείου
+          </button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- VIEW: Filters (Φίλτρα) -->
+<div id="view-filters" class="view bg-slate-50" style="overflow-y:auto">
+  <div class="max-w-3xl mx-auto p-6 w-full">
+
+    <div class="flex items-center justify-between mb-2">
+      <div>
+        <h2 class="text-lg font-bold text-slate-800">Φίλτρα Ταχυδρομείου</h2>
+        <p class="text-xs text-slate-500 mt-1">Τρέχοντες Κανόνες Φιλτραρίσματος Ταχυδρομείου</p>
+      </div>
+      <button onclick="openFilterForm(null)" class="bg-uni-600 hover:bg-uni-700 text-white rounded-lg px-4 py-2 text-sm font-semibold transition flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+        Νέος Κανόνας
+      </button>
+    </div>
+
+    <p class="text-xs text-slate-500 mb-5 leading-relaxed">Εδώ μπορείτε να προσθέσετε ή να διαγράψετε κανόνες φιλτραρίσματος για τη λογαριασμό σας. Αυτά τα φίλτρα θα ελέγχονται κάθε φορά που λαμβάνετε ένα μήνυμα, ανεξάρτητα από το εργαλείο που χρησιμοποιείτε.</p>
+
+    <!-- Filter rule list -->
+    <div id="filterRuleList" class="flex flex-col gap-3 mb-6"></div>
+
+    <!-- Filter form -->
+    <div id="filterForm" class="hidden bg-white rounded-xl border border-slate-200 p-5">
+      <h3 id="filterFormTitle" class="font-semibold text-slate-800 mb-4">Νέος Κανόνας Φιλτραρίσματος</h3>
+      <input type="hidden" id="filterId">
+
+      <!-- Conditions -->
+      <div class="mb-4">
+        <label class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Συνθήκη</label>
+        <div class="flex flex-wrap gap-2 items-center">
+          <select id="filterCondField" class="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-uni-400 bg-white">
+            <option value="from">Από (From)</option>
+            <option value="to">Προς (To)</option>
+            <option value="subject">Θέμα (Subject)</option>
+            <option value="cc">Κοινοποίηση (CC)</option>
+            <option value="body">Σώμα μηνύματος</option>
+            <option value="size">Μέγεθος</option>
+          </select>
+          <select id="filterCondOp" class="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-uni-400 bg-white">
+            <option value="contains">περιέχει</option>
+            <option value="not_contains">δεν περιέχει</option>
+            <option value="equals">είναι ακριβώς</option>
+            <option value="starts">αρχίζει με</option>
+            <option value="ends">τελειώνει με</option>
+          </select>
+          <input id="filterCondValue" type="text" placeholder="τιμή…" class="flex-1 min-w-36 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+        </div>
+      </div>
+
+      <!-- Action -->
+      <div class="mb-5">
+        <label class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Ενέργεια</label>
+        <div class="flex flex-wrap gap-2 items-center">
+          <select id="filterAction" onchange="updateFilterActionUI()" class="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-uni-400 bg-white">
+            <option value="move">Μετακίνηση σε φάκελο</option>
+            <option value="delete">Διαγραφή</option>
+            <option value="read">Σήμανση ως αναγνωσμένο</option>
+            <option value="forward">Προώθηση σε διεύθυνση</option>
+            <option value="spam">Σήμανση ως ανεπιθύμητο</option>
+          </select>
+          <div id="filterActionExtra" class="flex-1 min-w-36">
+            <select id="filterActionFolder" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-uni-400 bg-white">
+              <option value="inbox">Εισερχόμενα</option>
+              <option value="junk">Ανεπιθύμητα</option>
+              <option value="trash">Κάδος</option>
+              <option value="drafts">Πρόχειρα</option>
+              <option value="Announcements">Announcements</option>
+              <option value="DI">DI</option>
+              <option value="DI.Students">DI.Students</option>
+            </select>
+            <input id="filterActionEmail" type="email" placeholder="email προώθησης…" class="hidden w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+          </div>
+        </div>
+      </div>
+
+      <!-- Form buttons -->
+      <div class="flex items-center gap-3">
+        <button onclick="saveFilter()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-5 py-2 text-sm font-semibold transition">Αποθήκευση Κανόνα</button>
+        <button onclick="closeFilterForm()" class="border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg px-4 py-2 text-sm transition">Ακύρωση</button>
+        <button id="deleteFilterBtn" onclick="deleteFilter()" class="hidden ml-auto border border-red-200 text-red-500 hover:bg-red-50 rounded-lg px-4 py-2 text-sm transition">Διαγραφή κανόνα</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div><!-- end views wrapper -->
+
+<!-- Compose Modal -->
+<div id="composeModal" class="compose-modal fixed inset-0 z-50 items-end justify-end p-4 pointer-events-none">
+  <div class="pointer-events-auto bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg flex flex-col" style="height: 520px;">
+    <!-- Compose header -->
+    <div class="flex items-center gap-2 px-4 py-3 bg-uni-800 text-white rounded-t-2xl flex-shrink-0">
+      <span id="composeTitle" class="font-semibold text-sm flex-1">Νέο Μήνυμα</span>
+      <button onclick="minimizeCompose()" class="p-1 hover:bg-uni-700 rounded-lg transition" title="Ελαχιστοποίηση">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 12H6"/></svg>
+      </button>
+      <button onclick="closeCompose()" class="p-1 hover:bg-uni-700 rounded-lg transition" title="Κλείσιμο">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <!-- Fields -->
+    <div class="flex flex-col flex-1 overflow-hidden">
+      <div class="flex items-center gap-2 px-4 py-2 border-b border-slate-100 text-sm">
+        <span class="text-slate-400 w-12 flex-shrink-0 text-xs font-medium">Προς</span>
+        <input id="composeTo" type="email" placeholder="παραλήπτης@university.edu" class="flex-1 outline-none text-slate-800 placeholder-slate-300 text-sm" />
+      </div>
+      <div class="flex items-center gap-2 px-4 py-2 border-b border-slate-100 text-sm">
+        <span class="text-slate-400 w-12 flex-shrink-0 text-xs font-medium">Κοιν.</span>
+        <input id="composeCc" type="email" placeholder="Προαιρετικό" class="flex-1 outline-none text-slate-800 placeholder-slate-300 text-sm" />
+        <button onclick="toggleBcc()" class="text-xs text-slate-400 hover:text-uni-600 transition flex-shrink-0" title="Κρυφή Κοινοποίηση">Κρ.Κ.</button>
+      </div>
+      <div id="bccRow" class="hidden items-center gap-2 px-4 py-2 border-b border-slate-100 text-sm">
+        <span class="text-slate-400 w-12 flex-shrink-0 text-xs font-medium">Κρ.Κ.</span>
+        <input id="composeBcc" type="email" placeholder="Κρυφή κοινοποίηση" class="flex-1 outline-none text-slate-800 placeholder-slate-300 text-sm" />
+        <button onclick="toggleBcc()" class="text-xs text-slate-400 hover:text-red-400 transition flex-shrink-0" title="Απόκρυψη">✕</button>
+      </div>
+      <div class="flex items-center gap-2 px-4 py-2 border-b border-slate-100 text-sm">
+        <span class="text-slate-400 w-12 flex-shrink-0 text-xs font-medium">Θέμα</span>
+        <input id="composeSubject" type="text" placeholder="Θέμα μηνύματος" class="flex-1 outline-none text-slate-800 placeholder-slate-300 text-sm font-medium" />
+      </div>
+      <textarea id="composeBody" placeholder="Γράψτε το μήνυμά σας..." class="flex-1 px-4 py-3 outline-none text-sm text-slate-700 placeholder-slate-300 resize-none leading-relaxed"></textarea>
+
+      <!-- Compose toolbar -->
+      <div class="flex items-center gap-1 px-4 py-2.5 border-t border-slate-100 flex-shrink-0">
+        <button onclick="sendEmail()" class="bg-uni-600 hover:bg-uni-700 text-white rounded-lg px-5 py-2 text-sm font-semibold transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+          Αποστολή
+        </button>
+        <div class="flex-1"></div>
+        <button class="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-500" title="Επισύναψη αρχείου">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+        </button>
+        <button class="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-500" title="Μορφοποίηση">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16"/></svg>
+        </button>
+        <button onclick="saveDraft()" class="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-500" title="Αποθήκευση προχείρου">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+        </button>
+        <button onclick="deleteComposeDraft()" class="p-1.5 hover:bg-red-50 rounded-lg transition text-slate-500 hover:text-red-500" title="Απόρριψη">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-sm rounded-xl px-4 py-2.5 shadow-lg z-50 transition-all duration-300 opacity-0 pointer-events-none">
+  Το μήνυμα στάλθηκε
+</div>
+
+<script>
+// ─── Data ──────────────────────────────────────────────────────────────────
+const AVATAR_COLORS = ['#2563eb','#7c3aed','#db2777','#059669','#d97706','#dc2626','#0891b2'];
+
+const allEmails = [
+  {
+    id: 1, folder: 'inbox', unread: true, starred: false,
+    from: 'Dr. Sarah Mitchell', fromAddr: 's.mitchell@university.edu',
+    to: 'me',
+    subject: 'Assignment 3 Feedback & Grade',
+    preview: "Hi Alex, I've reviewed your submission for Assignment 3 and I'm pleased to say you've done an excellent job...",
+    body: `Hi Alex,
+
+I've reviewed your submission for Assignment 3 and I'm pleased to say you've done an excellent job on the data analysis section. Your approach to the regression model was particularly impressive.
+
+A few minor points for improvement:
+• The literature review could cite more recent papers (post-2020)
+• Figure 3 label is slightly ambiguous — consider rewording
+• The conclusion could be expanded with future research directions
+
+Overall grade: A- (88%)
+
+Keep up the great work! Let me know if you'd like to discuss any of the feedback in more detail during office hours (Thursdays 2–4 PM, Room 204).
+
+Best regards,
+Dr. Sarah Mitchell
+Department of Computer Science`,
+    date: 'Mar 28', dateTime: '2026-03-28T09:14:00', tags: ['coursework'],
+  },
+  {
+    id: 2, folder: 'inbox', unread: true, starred: true,
+    from: 'Registrar\'s Office', fromAddr: 'registrar@university.edu',
+    to: 'me',
+    subject: 'Spring 2026 Exam Timetable — Action Required',
+    preview: 'Your personalised exam timetable for the Spring 2026 semester is now available. Please review and confirm...',
+    body: `Dear Alex Johnson,
+
+Your personalised exam timetable for the Spring 2026 semester is now available on the Student Portal.
+
+IMPORTANT: Please review and confirm your timetable by 4th April 2026. If you have any scheduling conflicts or require special accommodations, you must notify this office no later than 31st March.
+
+Your scheduled exams:
+• CS401 — Advanced Algorithms: Mon 18 May, 09:00, Hall B
+• CS432 — Machine Learning: Wed 20 May, 14:00, Hall A
+• CS455 — Distributed Systems: Fri 22 May, 09:00, Room 301
+
+Special accommodations requests should be submitted via the Student Portal under "Exam Support."
+
+Kind regards,
+The Registrar's Office
+University Administration Building, Room 102`,
+    date: 'Mar 28', dateTime: '2026-03-28T08:30:00', tags: ['admin'],
+  },
+  {
+    id: 3, folder: 'inbox', unread: true, starred: false,
+    from: 'Prof. James Okafor', fromAddr: 'j.okafor@university.edu',
+    to: 'me',
+    subject: 'Re: Research Project Proposal — Approved!',
+    preview: 'Alex, great news! The research committee has reviewed your proposal on "Federated Learning in Healthcare" and...',
+    body: `Alex,
+
+Great news! The research committee has reviewed your proposal on "Federated Learning in Healthcare" and it has been approved for the Spring 2026 cycle.
+
+Next steps:
+1. Complete the ethics approval form (attached to this email)
+2. Meet with me next week to finalise the research timeline
+3. Apply for the £500 student research grant by 15 April — details at research.university.edu/grants
+
+I'm excited to work with you on this. The methodology you proposed is solid, and I think the privacy-preserving angle will make for a compelling paper.
+
+Let's meet Tuesday at 11am if that works for you? My office is in the CS building, room 317.
+
+Best,
+Prof. James Okafor
+Chair, CS Research Committee`,
+    date: 'Mar 27', dateTime: '2026-03-27T16:45:00', tags: ['research'],
+  },
+  {
+    id: 4, folder: 'inbox', unread: true, starred: false,
+    from: 'Tech Society', fromAddr: 'techsoc@students.university.edu',
+    to: 'cs-students@university.edu',
+    subject: 'Hackathon 2026 — Registration Now Open!',
+    preview: 'We\'re thrilled to announce the annual University Hackathon is back! This year\'s theme is "AI for Social Good"...',
+    body: `Hey everyone!
+
+We're thrilled to announce the annual University Hackathon is back! 🚀
+
+📅 Date: 10–11 April 2026
+📍 Venue: The Innovation Hub, Level 2
+🎯 Theme: "AI for Social Good"
+🏆 Prizes: £1,000 first place, £500 runner-up, £250 third place
+
+Teams of 2–4 students. All skill levels welcome. Food and drinks provided throughout.
+
+Register at: techsoc.university.edu/hackathon
+Deadline: 5 April 2026
+
+Sponsors include: Google, Microsoft, and two local tech startups.
+
+See you there!
+The Tech Society Committee`,
+    date: 'Mar 27', dateTime: '2026-03-27T11:20:00', tags: ['clubs'],
+  },
+  {
+    id: 5, folder: 'inbox', unread: false, starred: false,
+    from: 'Library Services', fromAddr: 'library@university.edu',
+    to: 'me',
+    subject: 'Book Return Reminder — Due Tomorrow',
+    preview: 'This is a reminder that the following items borrowed from the Main Library are due for return tomorrow...',
+    body: `Dear Alex Johnson,
+
+This is a reminder that the following items borrowed from the Main Library are due for return tomorrow (29 March 2026):
+
+1. "Deep Learning" by Goodfellow, Bengio & Courville — Due: 29 Mar
+2. "The Algorithm Design Manual" by Skiena — Due: 29 Mar
+
+You can renew these items online at library.university.edu/renew (up to 3 times if no holds are placed) or in person at the Main Library desk.
+
+Overdue fines: £0.20 per item per day.
+
+Library Hours: Mon–Fri 08:00–22:00, Sat–Sun 10:00–18:00
+
+Best,
+Library Services`,
+    date: 'Mar 27', dateTime: '2026-03-27T09:00:00', tags: ['admin'],
+  },
+  {
+    id: 6, folder: 'inbox', unread: false, starred: true,
+    from: 'Dr. Sarah Mitchell', fromAddr: 's.mitchell@university.edu',
+    to: 'me',
+    subject: 'Guest Lecture Thursday — Prof. Yann LeCun',
+    preview: 'I\'m pleased to share that Professor Yann LeCun (Meta AI / NYU) will be giving a guest lecture this Thursday...',
+    body: `Hi everyone,
+
+I'm pleased to share that Professor Yann LeCun (Meta AI / NYU) will be giving a guest lecture this Thursday at 3pm in the Main Auditorium.
+
+Topic: "The Future of Autonomous AI — Moving Beyond LLMs"
+
+This is an unmissable opportunity. Prof. LeCun's work on convolutional neural networks underpins much of modern computer vision.
+
+The lecture is free and open to all students. Seats are limited — first come, first served.
+
+A Q&A session will follow. If you'd like to submit questions in advance, email them to me by Wednesday noon.
+
+Warm regards,
+Dr. Sarah Mitchell`,
+    date: 'Mar 26', dateTime: '2026-03-26T14:15:00', tags: ['coursework'],
+  },
+  {
+    id: 7, folder: 'inbox', unread: false, starred: false,
+    from: 'Finance Office', fromAddr: 'finance@university.edu',
+    to: 'me',
+    subject: 'Student Bursary Payment — Processed',
+    preview: 'We are pleased to confirm that your student bursary payment of £850 has been processed and will appear...',
+    body: `Dear Alex Johnson,
+
+We are pleased to confirm that your student bursary payment of £850 has been processed and will appear in your bank account within 3–5 business days (by 1 April 2026).
+
+Payment reference: UNI-BURS-2026-04471
+
+If you have not received the payment by 3 April 2026, please contact the Finance Office with your student ID and payment reference.
+
+Finance Office
+finance@university.edu | +44 (0)1234 567890
+Room 015, Administration Building`,
+    date: 'Mar 25', dateTime: '2026-03-25T11:30:00', tags: ['admin'],
+  },
+  {
+    id: 8, folder: 'inbox', unread: false, starred: false,
+    from: 'Careers Service', fromAddr: 'careers@university.edu',
+    to: 'cs-students@university.edu',
+    subject: 'Spring Careers Fair — 200+ Employers Attending',
+    preview: 'The Spring Careers Fair is just around the corner. This year we have over 200 employers, including 15 FTSE100 companies...',
+    body: `Dear Students,
+
+The Spring Careers Fair is just around the corner!
+
+📅 Date: 8 April 2026
+📍 Venue: Sports Hall, Campus South
+🕙 Time: 10:00–16:00
+
+This year we have over 200 employers attending, including 15 FTSE100 companies, top graduate schemes, and exciting startups.
+
+Highlights:
+• CV clinic (book a 15-min slot at careers.university.edu)
+• Panel discussion: "Breaking into Tech in 2026" at 12:00
+• Networking lunch for final-year students (limited places)
+
+Bring printed copies of your CV and dress professionally.
+
+Register to attend (free): careers.university.edu/fair
+
+Best of luck!
+The Careers Service Team`,
+    date: 'Mar 24', dateTime: '2026-03-24T09:45:00', tags: [],
+  },
+  {
+    id: 9, folder: 'sent', unread: false, starred: false,
+    from: 'Alex Johnson (me)', fromAddr: 'a.johnson@student.university.edu',
+    to: 'j.okafor@university.edu',
+    subject: 'Research Project Proposal — Federated Learning',
+    preview: 'Dear Prof. Okafor, please find attached my research proposal titled "Privacy-Preserving Federated Learning in Healthcare"...',
+    body: `Dear Prof. Okafor,
+
+Please find attached my research proposal titled "Privacy-Preserving Federated Learning in Healthcare Systems."
+
+The proposal covers:
+1. Problem statement and motivation
+2. Literature review (42 references)
+3. Proposed methodology (differential privacy + federated averaging)
+4. Expected contributions
+5. Timeline and resource requirements
+
+I would appreciate your feedback at your earliest convenience. I am particularly interested in your thoughts on the evaluation framework proposed in Section 4.
+
+Thank you for your time and support.
+
+Best regards,
+Alex Johnson
+Student ID: 20234471
+MSc Computer Science, Year 1`,
+    date: 'Mar 25', dateTime: '2026-03-25T14:20:00', tags: ['research'],
+  },
+  {
+    id: 10, folder: 'sent', unread: false, starred: false,
+    from: 'Alex Johnson (me)', fromAddr: 'a.johnson@student.university.edu',
+    to: 's.mitchell@university.edu',
+    subject: 'Office Hours Query — Assignment 3',
+    preview: 'Hi Dr. Mitchell, I wanted to clarify the requirements for the visualisation section of Assignment 3 before submission...',
+    body: `Hi Dr. Mitchell,
+
+I wanted to clarify the requirements for the visualisation section of Assignment 3 before submission.
+
+Specifically, I'm unsure whether the confusion matrix counts towards the 3-figure limit, or if it's considered supplementary material.
+
+Also, should the figures be embedded in the main report or placed in an appendix?
+
+Thank you for your time.
+
+Best regards,
+Alex`,
+    date: 'Mar 22', dateTime: '2026-03-22T10:05:00', tags: ['coursework'],
+  },
+  {
+    id: 11, folder: 'drafts', unread: false, starred: false,
+    from: 'Alex Johnson (me)', fromAddr: 'a.johnson@student.university.edu',
+    to: 'welfare@university.edu',
+    subject: 'Request for Exam Deferral',
+    preview: 'Dear Student Welfare Team, I am writing to request a deferral for my upcoming examination due to...',
+    body: `Dear Student Welfare Team,
+
+I am writing to request a deferral for my upcoming examination in CS401 (Advanced Algorithms) due to a personal circumstances.
+
+[DRAFT — complete this section]
+
+I understand that I will need to provide supporting documentation. I am happy to supply this at your request.
+
+Please let me know the process for submitting a formal deferral application.
+
+Thank you for your understanding.
+
+Kind regards,
+Alex Johnson`,
+    date: 'Mar 20', dateTime: '2026-03-20T19:30:00', tags: [],
+  },
+  {
+    id: 12, folder: 'drafts', unread: false, starred: false,
+    from: 'Alex Johnson (me)', fromAddr: 'a.johnson@student.university.edu',
+    to: '',
+    subject: 'Ideas for final year project',
+    preview: '1. Real-time sign language translation using computer vision 2. Energy consumption prediction for smart buildings...',
+    body: `1. Real-time sign language translation using computer vision
+2. Energy consumption prediction for smart buildings using ML
+3. Bias detection in NLP models — automated audit tool
+4. Privacy-preserving recommendation systems
+
+Possible supervisors to ask:
+- Dr. Mitchell (CV/NLP)
+- Prof. Okafor (research methods)
+- Dr. Chen (systems)
+
+[DRAFT — don't send]`,
+    date: 'Mar 18', dateTime: '2026-03-18T21:15:00', tags: [],
+  },
+  {
+    id: 13, folder: 'junk', unread: true, starred: false,
+    from: 'Discount Laptops 4U', fromAddr: 'noreply@discountlaptops4u.biz',
+    to: 'undisclosed-recipients',
+    subject: '🔥 AMAZING DEALS on Laptops — 80% OFF Today Only!!!',
+    preview: 'Don\'t miss out on INCREDIBLE deals! Best laptops at unbelievable prices. Limited time only!!',
+    body: `INCREDIBLE LAPTOP DEALS — TODAY ONLY!!! 🔥🔥🔥
+
+Don't miss out on AMAZING prices you won't find anywhere else!
+
+[This message has been identified as possible spam]`,
+    date: 'Mar 28', dateTime: '2026-03-28T07:00:00', tags: [],
+  },
+  {
+    id: 14, folder: 'trash', unread: false, starred: false,
+    from: 'Events Team', fromAddr: 'events@university.edu',
+    to: 'all-students@university.edu',
+    subject: 'Campus Open Day — Volunteer Needed',
+    preview: 'We are looking for student volunteers for the upcoming Campus Open Day on 5 April. If you are interested...',
+    body: `Dear Students,
+
+We are looking for enthusiastic student volunteers for the upcoming Campus Open Day on 5 April 2026.
+
+Volunteers needed for:
+• Campus tours (2-hour slots)
+• Department showcases
+• Information stalls
+• Social media coverage
+
+Lunch and a £15 Amazon voucher provided. Great for your CV!
+
+Sign up at: events.university.edu/openday-volunteer
+
+Thanks,
+The Events Team`,
+    date: 'Mar 23', dateTime: '2026-03-23T12:00:00', tags: [],
+  },
+];
+
+// ─── State ─────────────────────────────────────────────────────────────────
+let currentFolder = 'inbox';
+let currentEmailId = null;
+let searchQuery = '';
+let sortCol = 'date';
+let sortDir = 'desc';
+let currentPage = 1;
+let PAGE_SIZE = 20;
+let selectedEmails = new Set();
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+function getInitials(name) {
+  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+}
+
+function getAvatarColor(name) {
+  let hash = 0;
+  for (let c of name) hash = (hash * 31 + c.charCodeAt(0)) & 0xffffff;
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function showToast(msg, duration = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.opacity = '1';
+  setTimeout(() => { t.style.opacity = '0'; }, duration);
+}
+
+// ─── Folder filtering + sorting ─────────────────────────────────────────────
+function getEmailsForFolder(folder) {
+  let emails = allEmails;
+  if (folder.startsWith('label-')) {
+    const label = folder.replace('label-', '');
+    emails = emails.filter(e => e.tags && e.tags.includes(label) && e.folder !== 'trash');
+  } else {
+    emails = emails.filter(e => e.folder === folder);
+  }
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    emails = emails.filter(e => {
+      if (searchField === 'from')    return e.from.toLowerCase().includes(q);
+      if (searchField === 'subject') return e.subject.toLowerCase().includes(q);
+      if (searchField === 'body')    return e.body.toLowerCase().includes(q);
+      if (searchField === 'to')      return (e.to || '').toLowerCase().includes(q);
+      if (searchField === 'cc')      return (e.cc || '').toLowerCase().includes(q);
+      return e.from.toLowerCase().includes(q) || e.subject.toLowerCase().includes(q) ||
+             e.body.toLowerCase().includes(q) || (e.to || '').toLowerCase().includes(q);
+    });
+  }
+  // Sort
+  emails = [...emails].sort((a, b) => {
+    let va, vb;
+    if (sortCol === 'from') { va = a.from.toLowerCase(); vb = b.from.toLowerCase(); }
+    else { va = a.dateTime; vb = b.dateTime; }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  return emails;
+}
+
+function totalPages() {
+  return Math.max(1, Math.ceil(getEmailsForFolder(currentFolder).length / PAGE_SIZE));
+}
+
+function setSort(col) {
+  if (sortCol === col) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+  else { sortCol = col; sortDir = col === 'date' ? 'desc' : 'asc'; }
+  currentPage = 1;
+  updateSortIcons();
+  renderEmailList();
+}
+
+function updateSortIcons() {
+  ['from','date'].forEach(col => {
+    const el = document.getElementById('sort-' + col + '-icon');
+    if (!el) return;
+    el.textContent = sortCol === col ? (sortDir === 'asc' ? '↑' : '↓') : '';
+    document.getElementById('sort-' + col).classList.toggle('text-uni-700', sortCol === col);
+  });
+}
+
+function goPage(p) {
+  const max = totalPages();
+  currentPage = Math.max(1, Math.min(max, p));
+  selectedEmails.clear();
+  document.getElementById('selectAllCheckbox').checked = false;
+  renderEmailList();
+}
+
+// ─── Render email list ──────────────────────────────────────────────────────
+function renderEmailList() {
+  const allFiltered = getEmailsForFolder(currentFolder);
+  const total = allFiltered.length;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const emails = allFiltered.slice(start, start + PAGE_SIZE);
+  const list = document.getElementById('emailList');
+
+  // Pagination bar
+  const pageInfo = document.getElementById('pageInfo');
+  if (total === 0) {
+    pageInfo.textContent = 'Κανένα μήνυμα';
+  } else {
+    pageInfo.textContent = `${start + 1}–${Math.min(start + PAGE_SIZE, total)} από ${total}`;
+  }
+  ['pageFirst','pagePrev'].forEach(id => document.getElementById(id).disabled = currentPage <= 1);
+  ['pageNext','pageLast'].forEach(id => document.getElementById(id).disabled = currentPage >= totalPages());
+
+  updateBulkBar();
+
+  if (emails.length === 0) {
+    list.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-400 gap-2 py-16">
+      <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+      <p class="text-sm">Δεν υπάρχουν μηνύματα</p>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = emails.map(email => {
+    const initials = getInitials(email.from);
+    const color = getAvatarColor(email.from);
+    const activeClass = email.id === currentEmailId ? 'active' : '';
+    const unreadClass = email.unread ? 'unread' : '';
+    const checked = selectedEmails.has(email.id) ? 'checked' : '';
+    const starIcon = email.starred
+      ? `<svg class="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>`
+      : '';
+
+    return `<div class="email-item ${activeClass} ${unreadClass} border-b border-slate-100 flex gap-2 transition select-none px-3 py-2.5" style="${activeClass ? 'border-left-color:#2563eb' : ''}">
+      <div class="flex items-start pt-1 flex-shrink-0">
+        <input type="checkbox" ${checked} onchange="toggleEmailSelect(${email.id}, this.checked)" onclick="event.stopPropagation()"
+          class="w-4 h-4 rounded border-slate-300 text-uni-600 cursor-pointer">
+      </div>
+      <div class="flex-1 min-w-0 cursor-pointer" onclick="openEmail(${email.id})">
+        <div class="flex items-center justify-between gap-1 mb-0.5">
+          <span class="email-sender text-sm text-slate-700 truncate">${email.from.replace(' (me)', '')}</span>
+          <div class="flex items-center gap-1 flex-shrink-0">
+            ${starIcon}
+            <span class="text-xs text-slate-400">${email.date}</span>
+          </div>
+        </div>
+        <p class="email-subject text-sm text-slate-600 truncate">${email.subject}</p>
+        <p class="text-xs text-slate-400 truncate mt-0.5">${email.preview}</p>
+      </div>
+      ${email.unread ? '<span class="w-2 h-2 bg-uni-600 rounded-full flex-shrink-0 mt-3"></span>' : '<span class="w-2 h-2 flex-shrink-0 mt-3"></span>'}
+    </div>`;
+  }).join('');
+}
+
+// ─── Mobile sidebar drawer ───────────────────────────────────────────────────
+function toggleSidebar() {
+  const sidebar = document.getElementById('mainSidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  const isOpen = sidebar.classList.contains('sidebar-open');
+  if (isOpen) {
+    sidebar.classList.remove('sidebar-open');
+    overlay.classList.remove('open');
+  } else {
+    sidebar.classList.add('sidebar-open');
+    overlay.classList.add('open');
+  }
+}
+
+function closeSidebar() {
+  document.getElementById('mainSidebar').classList.remove('sidebar-open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+// ─── Mobile reading pane ─────────────────────────────────────────────────────
+function closeMobileReading() {
+  document.getElementById('readingPane').classList.remove('mobile-open');
+  currentEmailId = null;
+}
+
+// ─── Open email ─────────────────────────────────────────────────────────────
+function openEmail(id) {
+  const email = allEmails.find(e => e.id === id);
+  if (!email) return;
+
+  // Mark as read
+  email.unread = false;
+  currentEmailId = id;
+  renderEmailList();
+  updateBadge('inbox');
+  renderNotifList();
+
+  // On mobile, slide in reading pane
+  if (window.innerWidth < 768) {
+    document.getElementById('readingPane').classList.add('mobile-open');
+  }
+
+  // Fill reading pane
+  document.getElementById('emptyState').classList.add('hidden');
+  document.getElementById('emailContent').classList.remove('hidden');
+
+  document.getElementById('emailSubject').textContent = email.subject;
+  document.getElementById('emailDate').textContent = new Date(email.dateTime).toLocaleString('el-GR', {
+    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+  document.getElementById('emailFrom').textContent = email.from;
+  document.getElementById('emailFromAddr').textContent = `<${email.fromAddr}>`;
+  document.getElementById('emailTo').textContent = email.to === 'me' ? 'εγώ' : email.to;
+  document.getElementById('emailBody').textContent = email.body;
+
+  const avatar = document.getElementById('avatarLarge');
+  avatar.textContent = getInitials(email.from);
+  avatar.style.background = getAvatarColor(email.from);
+
+  // Star button
+  const starBtn = document.getElementById('starBtn');
+  starBtn.querySelector('svg').setAttribute('fill', email.starred ? '#f59e0b' : 'none');
+  starBtn.querySelector('svg').style.color = email.starred ? '#f59e0b' : '';
+
+  // Tags
+  const tagsEl = document.getElementById('emailTags');
+  const tagColors = { coursework: 'bg-blue-100 text-blue-700', admin: 'bg-purple-100 text-purple-700', clubs: 'bg-green-100 text-green-700', research: 'bg-amber-100 text-amber-700' };
+  const tagNames = { coursework: 'Εργασίες', admin: 'Διοίκηση', clubs: 'Σύλλογοι', research: 'Έρευνα' };
+  tagsEl.innerHTML = (email.tags || []).map(t => `<span class="tag ${tagColors[t] || 'bg-slate-100 text-slate-600'}">${tagNames[t] || t}</span>`).join('');
+}
+
+// ─── Actions ────────────────────────────────────────────────────────────────
+function toggleStar() {
+  if (!currentEmailId) return;
+  const email = allEmails.find(e => e.id === currentEmailId);
+  email.starred = !email.starred;
+  const starBtn = document.getElementById('starBtn');
+  starBtn.querySelector('svg').setAttribute('fill', email.starred ? '#f59e0b' : 'none');
+  renderEmailList();
+  showToast(email.starred ? 'Προστέθηκε αστέρι' : 'Αφαιρέθηκε αστέρι');
+}
+
+function archiveEmail() {
+  if (!currentEmailId) return;
+  const email = allEmails.find(e => e.id === currentEmailId);
+  email.folder = 'archive';
+  closeReadingPane();
+  renderEmailList();
+  showToast('Το μήνυμα αρχειοθετήθηκε');
+}
+
+function deleteEmail() {
+  if (!currentEmailId) return;
+  const email = allEmails.find(e => e.id === currentEmailId);
+  if (email.folder === 'trash') {
+    // Permanent delete
+    const idx = allEmails.indexOf(email);
+    allEmails.splice(idx, 1);
+    showToast('Οριστική διαγραφή');
+  } else {
+    email.folder = 'trash';
+    showToast('Μεταφορά στον Κάδο');
+  }
+  closeReadingPane();
+  renderEmailList();
+}
+
+function markSpam() {
+  if (!currentEmailId) return;
+  const email = allEmails.find(e => e.id === currentEmailId);
+  email.folder = 'junk';
+  closeReadingPane();
+  renderEmailList();
+  showToast('Επισημάνθηκε ως ανεπιθύμητο');
+}
+
+function closeReadingPane() {
+  currentEmailId = null;
+  document.getElementById('emptyState').classList.remove('hidden');
+  document.getElementById('emailContent').classList.add('hidden');
+}
+
+// ─── Folder switching ───────────────────────────────────────────────────────
+const FOLDER_TITLES = {
+  inbox: 'Εισερχόμενα', starred: 'Με αστέρι', sent: 'Απεσταλμένα', drafts: 'Πρόχειρα',
+  junk: 'Ανεπιθύμητα', trash: 'Κάδος',
+  'label-coursework': 'Εργασίες', 'label-admin': 'Διοίκηση',
+  'label-clubs': 'Σύλλογοι', 'label-research': 'Έρευνα',
+};
+
+function switchFolder(folder, btn) {
+  currentFolder = folder;
+  currentEmailId = null;
+  searchQuery = '';
+  currentPage = 1;
+  selectedEmails.clear();
+  document.getElementById('searchInput').value = '';
+  document.getElementById('selectAllCheckbox').checked = false;
+  document.getElementById('folderTitle').textContent = FOLDER_TITLES[folder] || folder;
+  closeReadingPane();
+
+  // Update sidebar active states
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  renderEmailList();
+  // Close sidebar on mobile after selecting a folder
+  if (window.innerWidth < 768) closeSidebar();
+}
+
+function updateBadge(folder) {
+  const count = allEmails.filter(e => e.folder === folder && e.unread).length;
+  const badge = document.getElementById(`badge-${folder}`);
+  if (badge) {
+    badge.textContent = count;
+    badge.style.display = count > 0 ? 'flex' : 'none';
+  }
+}
+
+// ─── Search field selector ──────────────────────────────────────────────────
+let searchField = 'from';
+
+function toggleSearchMenu() {
+  const menu = document.getElementById('searchMenu');
+  menu.classList.toggle('hidden');
+}
+
+function setSearchField(field, label) {
+  searchField = field;
+  document.getElementById('searchFieldLabel').textContent = label;
+  // Update active dot
+  ['from','subject','body','to','cc','all'].forEach(f => {
+    const dot = document.getElementById('sf-' + f);
+    if (dot) dot.className = `w-2 h-2 rounded-full ${f === field ? 'bg-uni-600' : ''}`;
+  });
+  document.getElementById('searchMenu').classList.add('hidden');
+  // Re-run search if there's a query
+  const q = document.getElementById('searchInput').value;
+  if (q) handleSearch(q);
+}
+
+// Close search menu when clicking outside
+document.addEventListener('click', e => {
+  const menu = document.getElementById('searchMenu');
+  if (!menu || menu.classList.contains('hidden')) return;
+  if (!e.target.closest('#searchMenu') && !e.target.closest('#searchMenuBtn')) {
+    menu.classList.add('hidden');
+  }
+});
+
+// ─── Search ─────────────────────────────────────────────────────────────────
+function handleSearch(value) {
+  searchQuery = value.trim();
+  if (searchQuery) {
+    document.getElementById('folderTitle').textContent = `Αναζήτηση: "${searchQuery}"`;
+    const q = searchQuery.toLowerCase();
+    const emails = allEmails.filter(e => {
+      if (e.folder === 'trash' || e.folder === 'junk') return false;
+      if (searchField === 'from')    return e.from.toLowerCase().includes(q);
+      if (searchField === 'subject') return e.subject.toLowerCase().includes(q);
+      if (searchField === 'body')    return e.body.toLowerCase().includes(q);
+      if (searchField === 'to')      return (e.to || '').toLowerCase().includes(q);
+      if (searchField === 'cc')      return (e.cc || '').toLowerCase().includes(q);
+      // 'all'
+      return e.from.toLowerCase().includes(q) || e.subject.toLowerCase().includes(q) ||
+             e.body.toLowerCase().includes(q) || (e.to || '').toLowerCase().includes(q);
+    });
+    renderSearchResults(emails);
+  } else {
+    document.getElementById('folderTitle').textContent = FOLDER_TITLES[currentFolder] || currentFolder;
+    renderEmailList();
+  }
+}
+
+function renderSearchResults(emails) {
+  const list = document.getElementById('emailList');
+  if (emails.length === 0) {
+    list.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-400 gap-2 py-16">
+      <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/></svg>
+      <p class="text-sm">Δεν βρέθηκαν αποτελέσματα</p>
+    </div>`;
+    return;
+  }
+  const list2 = document.getElementById('emailList');
+  list2.innerHTML = emails.map(email => {
+    const initials = getInitials(email.from);
+    const color = getAvatarColor(email.from);
+    const activeClass = email.id === currentEmailId ? 'active' : '';
+    const unreadClass = email.unread ? 'unread' : '';
+    return `<div class="email-item ${activeClass} ${unreadClass} cursor-pointer px-4 py-3 border-b border-slate-100 flex gap-3 transition select-none" onclick="openEmail(${email.id})">
+      <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5" style="background:${color}">${initials}</div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between gap-1 mb-0.5">
+          <span class="email-sender text-sm text-slate-700 truncate">${email.from.replace(' (me)', '')}</span>
+          <span class="text-xs text-slate-400">${email.date}</span>
+        </div>
+        <p class="email-subject text-sm text-slate-600 truncate">${email.subject}</p>
+        <p class="text-xs text-slate-400 truncate mt-0.5">${email.preview}</p>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── Compose ─────────────────────────────────────────────────────────────────
+function openCompose(mode) {
+  const modal = document.getElementById('composeModal');
+  const titleEl = document.getElementById('composeTitle');
+  const toEl = document.getElementById('composeTo');
+  const subjectEl = document.getElementById('composeSubject');
+  const bodyEl = document.getElementById('composeBody');
+
+  if (mode === 'reply' && currentEmailId) {
+    const email = allEmails.find(e => e.id === currentEmailId);
+    titleEl.textContent = 'Απάντηση';
+    toEl.value = email.fromAddr;
+    subjectEl.value = email.subject.startsWith('Απ:') ? email.subject : `Απ: ${email.subject}`;
+    bodyEl.value = `\n\n\n--- Αρχικό μήνυμα ---\nΑπό: ${email.from} <${email.fromAddr}>\nΗμερομηνία: ${email.date}\n\n${email.body}`;
+  } else if (mode === 'forward' && currentEmailId) {
+    const email = allEmails.find(e => e.id === currentEmailId);
+    titleEl.textContent = 'Προώθηση';
+    toEl.value = '';
+    subjectEl.value = `Πρθ: ${email.subject}`;
+    bodyEl.value = `\n\n\n--- Προωθημένο μήνυμα ---\nΑπό: ${email.from} <${email.fromAddr}>\nΗμερομηνία: ${email.date}\nΠρος: ${email.to}\n\n${email.body}`;
+  } else {
+    titleEl.textContent = 'Νέο Μήνυμα';
+    toEl.value = '';
+    subjectEl.value = '';
+    bodyEl.value = '';
+  }
+
+  modal.classList.add('open');
+  setTimeout(() => toEl.focus(), 50);
+}
+
+function closeCompose() {
+  document.getElementById('composeModal').classList.remove('open');
+  // Reset BCC row
+  document.getElementById('bccRow').classList.add('hidden');
+  document.getElementById('bccRow').classList.remove('flex');
+  document.getElementById('composeBcc').value = '';
+}
+
+function toggleBcc() {
+  const row = document.getElementById('bccRow');
+  const hidden = row.classList.contains('hidden');
+  row.classList.toggle('hidden', !hidden);
+  row.classList.toggle('flex', hidden);
+  if (hidden) document.getElementById('composeBcc').focus();
+}
+
+function minimizeCompose() {
+  closeCompose();
+  showToast('Το προχείρο αποθηκεύτηκε');
+}
+
+function sendEmail() {
+  const to = document.getElementById('composeTo').value.trim();
+  const subject = document.getElementById('composeSubject').value.trim();
+  if (!to) { document.getElementById('composeTo').focus(); return; }
+
+  const bcc = document.getElementById('composeBcc').value.trim();
+  const newEmail = {
+    id: Date.now(),
+    folder: 'sent',
+    unread: false,
+    starred: false,
+    from: 'Alex Johnson (me)',
+    fromAddr: 'a.johnson@student.university.edu',
+    to,
+    bcc: bcc || null,
+    subject: subject || '(χωρίς θέμα)',
+    preview: document.getElementById('composeBody').value.slice(0, 100),
+    body: document.getElementById('composeBody').value,
+    date: 'Σήμερα',
+    dateTime: new Date().toISOString(),
+    tags: [],
+  };
+  allEmails.unshift(newEmail);
+  closeCompose();
+  showToast('Το μήνυμα στάλθηκε');
+}
+
+function saveDraft() {
+  const subject = document.getElementById('composeSubject').value.trim();
+  const to = document.getElementById('composeTo').value.trim();
+  const newDraft = {
+    id: Date.now(),
+    folder: 'drafts',
+    unread: false,
+    starred: false,
+    from: 'Alex Johnson (me)',
+    fromAddr: 'a.johnson@student.university.edu',
+    to,
+    subject: subject || '(χωρίς θέμα)',
+    preview: document.getElementById('composeBody').value.slice(0, 100),
+    body: document.getElementById('composeBody').value,
+    date: 'Σήμερα',
+    dateTime: new Date().toISOString(),
+    tags: [],
+  };
+  allEmails.unshift(newDraft);
+  closeCompose();
+  showToast('Το προχείρο αποθηκεύτηκε');
+}
+
+function deleteComposeDraft() {
+  closeCompose();
+}
+
+// ─── Selection & bulk actions ────────────────────────────────────────────────
+function toggleEmailSelect(id, checked) {
+  if (checked) selectedEmails.add(id); else selectedEmails.delete(id);
+  updateBulkBar();
+}
+
+function toggleSelectAll(checked) {
+  const pageEmails = getEmailsForFolder(currentFolder)
+    .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  pageEmails.forEach(e => checked ? selectedEmails.add(e.id) : selectedEmails.delete(e.id));
+  renderEmailList();
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulkBar');
+  const count = selectedEmails.size;
+  if (count > 0) {
+    bar.classList.remove('hidden');
+    bar.classList.add('flex');
+    document.getElementById('bulkCount').textContent = `${count} επιλεγμένα`;
+  } else {
+    bar.classList.add('hidden');
+    bar.classList.remove('flex');
+  }
+}
+
+function bulkMarkRead() {
+  selectedEmails.forEach(id => { const e = allEmails.find(x => x.id === id); if (e) e.unread = false; });
+  selectedEmails.clear();
+  document.getElementById('selectAllCheckbox').checked = false;
+  renderEmailList(); updateBadge('inbox'); renderNotifList();
+  showToast('Σήμανση ως αναγνωσμένα');
+}
+
+function bulkMarkUnread() {
+  selectedEmails.forEach(id => { const e = allEmails.find(x => x.id === id); if (e) e.unread = true; });
+  selectedEmails.clear();
+  document.getElementById('selectAllCheckbox').checked = false;
+  renderEmailList(); updateBadge('inbox'); renderNotifList();
+  showToast('Σήμανση ως μη αναγνωσμένα');
+}
+
+function bulkDelete() {
+  if (!confirm(`Διαγραφή ${selectedEmails.size} μηνυμάτων;`)) return;
+  selectedEmails.forEach(id => {
+    const e = allEmails.find(x => x.id === id);
+    if (e) e.folder = e.folder === 'trash' ? 'deleted' : 'trash';
+  });
+  selectedEmails.clear();
+  document.getElementById('selectAllCheckbox').checked = false;
+  if (selectedEmails.has(currentEmailId)) closeReadingPane();
+  renderEmailList();
+  showToast('Μεταφορά στον Κάδο');
+}
+
+function bulkSpam() {
+  selectedEmails.forEach(id => { const e = allEmails.find(x => x.id === id); if (e) e.folder = 'junk'; });
+  selectedEmails.clear();
+  document.getElementById('selectAllCheckbox').checked = false;
+  renderEmailList();
+  showToast('Επισημάνθηκαν ως ανεπιθύμητα');
+}
+
+// ─── Misc ───────────────────────────────────────────────────────────────────
+function refreshList() {
+  renderEmailList();
+  showToast('Ενημερωμένο');
+}
+function promptNewLabel() {
+  const name = prompt('Όνομα νέας ετικέτας:');
+  if (name && name.trim()) showToast(`Η ετικέτα "${name.trim()}" δημιουργήθηκε`);
+}
+
+// ─── Folders ────────────────────────────────────────────────────────────────
+let customFolders = ['Announcements','CIVIS','Community','Events','Ext-Announcement','DI','Conferences','Projects','Students'];
+
+const ALL_SUBSCRIPTION_FOLDERS = [
+  { key: 'INBOX.Junk',                     label: 'INBOX.Junk',                      desc: 'Φάκελος ανεπιθύμητης αλληλογραφίας',                              tab: 'mine',     subscribed: true  },
+  { key: 'Announcements',                  label: 'Announcements',                    desc: 'Φάκελος γενικών ανακοινώσεων',                                    tab: 'mine',     subscribed: true  },
+  { key: 'Announcements.CIVIS',            label: 'Announcements.CIVIS',              desc: 'Ανακοινώσεις που αφορούν το πρόγραμμα CIVIS',                     tab: 'mine',     subscribed: true  },
+  { key: 'Announcements.Community',        label: 'Announcements.Community',          desc: 'Φάκελος ανακοινώσεων από την Πανεπιστημιακή Κοινότητα',           tab: 'mine',     subscribed: true  },
+  { key: 'Announcements.Events',           label: 'Announcements.Events',             desc: 'Φάκελος ανακοινώσεων για εκδηλώσεις',                             tab: 'mine',     subscribed: true  },
+  { key: 'Announcements.Ext-Announcements',label: 'Announcements.Ext-Announcements',  desc: 'Φάκελος ανακοινώσεων από τρίτους',                                tab: 'mine',     subscribed: true  },
+  { key: 'DI',                             label: 'DI',                               desc: 'Φάκελος ανακοινώσεων του Τμήματος Πληροφορικής και Τηλεπικοινωνιών', tab: 'mine',   subscribed: true  },
+  { key: 'DI.Conferences',                 label: 'DI.Conferences',                   desc: 'Συνέδρια Τμήματος Πληροφορικής και Τηλεπικοινωνιών',              tab: 'mine',     subscribed: true  },
+  { key: 'DI.Projects',                    label: 'DI.Projects',                      desc: 'Δραστηριότητες Τμήματος Πληροφορικής και Τηλεπικοινωνιών',       tab: 'mine',     subscribed: true  },
+  { key: 'DI.Students',                    label: 'DI.Students',                      desc: 'Φάκελος ανακοινώσεων και συζητήσεων προπτυχιακών φοιτητών',      tab: 'mine',     subscribed: true  },
+  { key: 'Projects',                       label: 'Projects',                         desc: 'Κοινόχρηστος φάκελος για τις δραστηριότητες του Πανεπιστημίου Αθηνών', tab: 'mine', subscribed: true  },
+  { key: 'sys.alumni',                     label: 'alumni',                           desc: 'Φάκελος αποφοίτων',                                               tab: 'system',   subscribed: false },
+  { key: 'sys.staff',                      label: 'staff',                            desc: 'Φάκελος προσωπικού',                                              tab: 'system',   subscribed: false },
+  { key: 'personal.archive',               label: 'Archive',                          desc: 'Προσωπικό αρχείο',                                                tab: 'personal', subscribed: false },
+  { key: 'users.shared1',                  label: 'shared.reading-group',             desc: 'Κοινόχρηστος φάκελος ομάδας ανάγνωσης',                          tab: 'users',    subscribed: false },
+];
+
+let currentSubTab = 'mine';
+
+function showSubscriptionsModal() {
+  document.getElementById('subscriptionsModal').classList.remove('hidden');
+  switchSubTab('mine');
+}
+
+function closeSubscriptionsModal() {
+  document.getElementById('subscriptionsModal').classList.add('hidden');
+}
+
+function switchSubTab(tab) {
+  currentSubTab = tab;
+  document.querySelectorAll('.subtab').forEach(el => {
+    el.classList.remove('border-uni-600','text-uni-700','bg-uni-50');
+    el.classList.add('border-transparent','text-slate-500');
+  });
+  const active = document.getElementById('subtab-' + tab);
+  active.classList.add('border-uni-600','text-uni-700','bg-uni-50');
+  active.classList.remove('border-transparent','text-slate-500');
+  renderSubTab();
+}
+
+function renderSubTab() {
+  const folders = ALL_SUBSCRIPTION_FOLDERS.filter(f => f.tab === currentSubTab);
+  const note = document.getElementById('subTabNote');
+  const list = document.getElementById('subFolderList');
+  const actionBtn = document.getElementById('subActionBtn');
+
+  if (currentSubTab === 'mine') {
+    note.innerHTML = 'Είστε ήδη συνδρομητής στους ακόλουθους φακέλους. <strong>Επιλέξτε όσους θέλετε να ακυρώσετε και πατήστε "Ακύρωση Συνδρομής":</strong>';
+    actionBtn.textContent = 'Ακύρωση Συνδρομής';
+    actionBtn.className = 'bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg px-6 py-2 text-sm font-medium transition';
+  } else {
+    note.innerHTML = 'Επιλέξτε φακέλους για να <strong>εγγραφείτε</strong> και πατήστε "Συνδρομή":';
+    actionBtn.textContent = 'Συνδρομή';
+    actionBtn.className = 'bg-uni-600 hover:bg-uni-700 text-white rounded-lg px-6 py-2 text-sm font-medium transition';
+  }
+
+  // All checkboxes start unchecked — user ticks what they want to act on
+  list.innerHTML = folders.map((f, i) => {
+    const rowBg = i % 2 === 0 ? 'bg-white' : 'bg-slate-50';
+    return `<label class="flex items-center gap-3 px-2 py-2.5 ${rowBg} hover:bg-uni-50 cursor-pointer rounded border-b border-slate-100 transition">
+      <input type="checkbox" data-key="${f.key}"
+        class="w-4 h-4 rounded border-slate-300 text-uni-600 cursor-pointer flex-shrink-0">
+      <span class="text-sm text-uni-700 font-medium w-56 flex-shrink-0">${f.label}</span>
+      <span class="text-xs text-slate-500">${f.desc}</span>
+    </label>`;
+  }).join('');
+
+  if (folders.length === 0) {
+    list.innerHTML = `<p class="text-sm text-slate-400 py-4 text-center">Δεν βρέθηκαν φάκελοι</p>`;
+  }
+}
+
+
+function applySubscriptions() {
+  // Collect checked keys from current list
+  const checkedKeys = [...document.querySelectorAll('#subFolderList input[type=checkbox]:checked')]
+    .map(el => el.dataset.key);
+
+  if (checkedKeys.length === 0) { showToast('Δεν επιλέξατε κανέναν φάκελο'); return; }
+
+  if (currentSubTab === 'mine') {
+    // Unsubscribe checked folders
+    checkedKeys.forEach(key => {
+      const f = ALL_SUBSCRIPTION_FOLDERS.find(x => x.key === key);
+      if (f) f.tab = 'system';
+    });
+    showToast(`Ακυρώθηκε η συνδρομή από ${checkedKeys.length} φάκελο(υς)`);
+  } else {
+    // Subscribe checked folders
+    checkedKeys.forEach(key => {
+      const f = ALL_SUBSCRIPTION_FOLDERS.find(x => x.key === key);
+      if (f) f.tab = 'mine';
+    });
+    showToast(`Εγγραφή σε ${checkedKeys.length} φάκελο(υς)`);
+  }
+  closeSubscriptionsModal();
+  renderFoldersView();
+}
+
+function renderFoldersView() {
+  // Rename list
+  const renameList = document.getElementById('renameFolderList');
+  if (customFolders.length === 0) {
+    renameList.innerHTML = `<p class="text-sm text-slate-400">Δεν βρέθηκαν φάκελοι</p>`;
+  } else {
+    renameList.innerHTML = customFolders.map((f, i) => `
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-slate-700 w-36 truncate">${f}</span>
+        <input type="text" placeholder="Νέο όνομα…" id="rename-${i}"
+          class="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-uni-400">
+        <button onclick="renameFolder(${i})" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs font-medium transition">Μετονομασία</button>
+      </div>`).join('');
+  }
+
+  // Delete list
+  const deleteList = document.getElementById('deleteFolderList');
+  if (customFolders.length === 0) {
+    deleteList.innerHTML = `<p class="text-sm text-slate-400">Δεν βρέθηκαν φάκελοι</p>`;
+  } else {
+    deleteList.innerHTML = customFolders.map((f, i) => `
+      <div class="flex items-center justify-between gap-2 py-1 border-b border-slate-50">
+        <span class="text-sm text-slate-700">${f}</span>
+        <button onclick="deleteFolder(${i})" class="text-xs text-red-500 hover:bg-red-50 rounded-lg px-3 py-1.5 transition border border-red-100">Διαγραφή</button>
+      </div>`).join('');
+  }
+
+  // Shared folders
+  const sharedList = document.getElementById('sharedFolderList');
+  const subscribed = ALL_SUBSCRIPTION_FOLDERS.filter(f => f.tab === 'mine');
+  sharedList.innerHTML = subscribed.map(f => `
+    <div class="flex items-center justify-between gap-2 py-1.5 border-b border-slate-50">
+      <div class="flex items-center gap-2">
+        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+        <span class="text-sm text-slate-700 font-medium">${f.label}</span>
+        <span class="text-xs text-slate-400">${f.desc}</span>
+      </div>
+      <button onclick="toggleSubscription('${f.key}', false); renderFoldersView()" class="text-xs rounded-lg px-3 py-1 transition border border-red-100 text-red-500 hover:bg-red-50">
+        Κατάργηση
+      </button>
+    </div>`).join('') || `<p class="text-xs text-slate-400">Δεν υπάρχουν ενεργές συνδρομές</p>`;
+}
+
+function createFolder() {
+  const name = document.getElementById('newFolderName').value.trim();
+  if (!name) { showToast('Εισάγετε όνομα φακέλου'); return; }
+  if (customFolders.includes(name)) { showToast('Ο φάκελος υπάρχει ήδη'); return; }
+  customFolders.push(name);
+  document.getElementById('newFolderName').value = '';
+  renderFoldersView();
+  showToast(`Ο φάκελος "${name}" δημιουργήθηκε`);
+}
+
+function renameFolder(i) {
+  const newName = document.getElementById(`rename-${i}`)?.value.trim();
+  if (!newName) { showToast('Εισάγετε νέο όνομα'); return; }
+  const old = customFolders[i];
+  customFolders[i] = newName;
+  renderFoldersView();
+  showToast(`"${old}" → "${newName}"`);
+}
+
+function deleteFolder(i) {
+  const name = customFolders[i];
+  if (!confirm(`Διαγραφή φακέλου "${name}";`)) return;
+  customFolders.splice(i, 1);
+  renderFoldersView();
+  showToast(`Ο φάκελος "${name}" διαγράφηκε`);
+}
+
+
+// ─── Contacts ───────────────────────────────────────────────────────────────
+let allContacts = [
+  { id: 1, firstname: 'Sarah', lastname: 'Mitchell', nickname: '', email: 's.mitchell@university.edu', phone: '+30 210 1234567', mobile: '', fax: '', homephone: '', org: 'Τμήμα Πληροφορικής', orgunit: '', title: 'Επίκουρη Καθηγήτρια', city: 'Αθήνα', street: '', zip: '', pobox: '', homeaddr: '', desc: '', website: '' },
+  { id: 2, firstname: 'James', lastname: 'Okafor', nickname: '', email: 'j.okafor@university.edu', phone: '', mobile: '+30 697 0000001', fax: '', homephone: '', org: 'Τμήμα Πληροφορικής', orgunit: '', title: 'Καθηγητής', city: '', street: '', zip: '', pobox: '', homeaddr: '', desc: 'Πρόεδρος Ερευνητικής Επιτροπής', website: '' },
+];
+let nextContactId = 3;
+
+function renderContactList() {
+  const q = (document.getElementById('contactSearch')?.value || '').toLowerCase();
+  const list = document.getElementById('contactList');
+  let contacts = allContacts.filter(c =>
+    !q || `${c.firstname} ${c.lastname} ${c.email}`.toLowerCase().includes(q)
+  ).sort((a, b) => a.lastname.localeCompare(b.lastname, 'el'));
+
+  if (contacts.length === 0) {
+    list.innerHTML = `<div class="p-4 text-xs text-slate-400 text-center">Δεν βρέθηκαν επαφές</div>`;
+    return;
+  }
+  list.innerHTML = contacts.map(c => {
+    const name = `${c.firstname} ${c.lastname}`.trim() || c.email;
+    const initials = getInitials(name);
+    const color = getAvatarColor(name);
+    return `<div onclick="openContactForm(${c.id})" class="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 border-b border-slate-100 transition">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:${color}">${initials}</div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm text-slate-800 font-medium truncate">${name}</p>
+        <p class="text-xs text-slate-400 truncate">${c.email}</p>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openContactForm(id) {
+  document.getElementById('contactEmpty').classList.add('hidden');
+  document.getElementById('contactForm').classList.remove('hidden');
+  const fields = ['firstname','lastname','nickname','email','phone','mobile','fax','homephone','org','orgunit','title','city','street','zip','pobox','homeaddr','desc','website'];
+  if (id === null) {
+    // New contact
+    document.getElementById('contactFormTitle').textContent = 'Νέα Επαφή';
+    document.getElementById('contactId').value = '';
+    document.getElementById('deleteContactBtn').classList.add('hidden');
+    document.querySelector('#contactForm button[onclick="saveContact()"]').textContent = '';
+    document.querySelector('#contactForm button[onclick="saveContact()"]').innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Προσθήκη Νέας Επαφής';
+    fields.forEach(f => { const el = document.getElementById('cf-' + f); if (el) el.value = ''; });
+    document.getElementById('cf-firstname').focus();
+  } else {
+    const c = allContacts.find(x => x.id === id);
+    if (!c) return;
+    document.getElementById('contactFormTitle').textContent = `${c.firstname} ${c.lastname}`.trim();
+    document.getElementById('contactId').value = id;
+    document.getElementById('deleteContactBtn').classList.remove('hidden');
+    document.querySelector('#contactForm button[onclick="saveContact()"]').innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Αποθήκευση Αλλαγών';
+    fields.forEach(f => { const el = document.getElementById('cf-' + f); if (el) el.value = c[f] || ''; });
+  }
+}
+
+function closeContactForm() {
+  document.getElementById('contactEmpty').classList.remove('hidden');
+  document.getElementById('contactForm').classList.add('hidden');
+}
+
+function saveContact() {
+  const id = document.getElementById('contactId').value;
+  const fields = ['firstname','lastname','nickname','email','phone','mobile','fax','homephone','org','orgunit','title','city','street','zip','pobox','homeaddr','desc','website'];
+  const data = {};
+  fields.forEach(f => { data[f] = (document.getElementById('cf-' + f)?.value || '').trim(); });
+  if (!data.firstname && !data.lastname && !data.email) {
+    showToast('Συμπληρώστε τουλάχιστον όνομα ή email'); return;
+  }
+  if (id) {
+    const c = allContacts.find(x => x.id === parseInt(id));
+    if (c) Object.assign(c, data);
+    showToast('Η επαφή αποθηκεύτηκε');
+  } else {
+    allContacts.push({ id: nextContactId++, ...data });
+    showToast('Η επαφή προστέθηκε');
+  }
+  renderContactList();
+  closeContactForm();
+}
+
+function deleteContact() {
+  const id = parseInt(document.getElementById('contactId').value);
+  if (!id) return;
+  const c = allContacts.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm(`Διαγραφή της επαφής "${c.firstname} ${c.lastname}";`)) return;
+  allContacts = allContacts.filter(x => x.id !== id);
+  renderContactList();
+  closeContactForm();
+  showToast('Η επαφή διαγράφηκε');
+}
+
+function importCsv(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines = e.target.result.split('\n').filter(l => l.trim());
+    let added = 0;
+    lines.slice(1).forEach(line => {
+      const [firstname='', lastname='', email='', phone=''] = line.split(',').map(s => s.trim().replace(/^"|"$/g,''));
+      if (firstname || email) { allContacts.push({ id: nextContactId++, firstname, lastname, nickname:'', email, phone, mobile:'', fax:'', homephone:'', org:'', orgunit:'', title:'', city:'', street:'', zip:'', pobox:'', homeaddr:'', desc:'', website:'' }); added++; }
+    });
+    renderContactList();
+    showToast(`Εισήχθησαν ${added} επαφές`);
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+// ─── Notifications ──────────────────────────────────────────────────────────
+function renderNotifList() {
+  const unreadEmails = allEmails.filter(e => e.unread && e.folder !== 'trash' && e.folder !== 'junk');
+  const badge = document.getElementById('notifBadge');
+  badge.textContent = unreadEmails.length;
+  badge.classList.toggle('hidden', unreadEmails.length === 0);
+
+  const countEl = document.getElementById('notifPanelCount');
+  if (countEl) countEl.textContent = unreadEmails.length > 0 ? `${unreadEmails.length} μηνύματα` : '';
+
+  const list = document.getElementById('notifList');
+  if (!list) return;
+
+  if (unreadEmails.length === 0) {
+    list.innerHTML = `<div class="py-8 text-center text-sm text-slate-400">Δεν υπάρχουν μη αναγνωσμένα μηνύματα</div>`;
+    return;
+  }
+
+  list.innerHTML = unreadEmails.map(email => {
+    const color = getAvatarColor(email.from);
+    const initials = getInitials(email.from);
+    return `<div class="flex items-start gap-3 px-4 py-3 bg-uni-50 hover:bg-uni-100 cursor-pointer transition" onclick="notifClick(${email.id})">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:${color}">${initials}</div>
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-semibold text-slate-700 truncate">${email.from.replace(' (me)', '')}</p>
+        <p class="text-xs text-slate-500 truncate">${email.subject}</p>
+        <p class="text-xs text-slate-400 mt-0.5">${email.date}</p>
+      </div>
+      <span class="w-2 h-2 bg-uni-500 rounded-full flex-shrink-0 mt-1"></span>
+    </div>`;
+  }).join('');
+}
+
+function toggleNotifPanel() {
+  const panel = document.getElementById('notifPanel');
+  panel.classList.toggle('hidden');
+  document.getElementById('profileMenu').classList.add('hidden');
+  if (!panel.classList.contains('hidden')) renderNotifList();
+}
+
+function notifClick(emailId) {
+  document.getElementById('notifPanel').classList.add('hidden');
+  switchView('inbox');
+  setTimeout(() => openEmail(emailId), 50);
+}
+
+function showUnreadOnly() {
+  document.getElementById('notifPanel').classList.add('hidden');
+  switchView('inbox');
+  const unreadEmails = allEmails.filter(e => e.unread && e.folder !== 'trash' && e.folder !== 'junk');
+  document.getElementById('folderTitle').textContent = 'Μη Αναγνωσμένα';
+  document.getElementById('pageInfo').textContent = `${unreadEmails.length} μη αναγνωσμένα`;
+  const list = document.getElementById('emailList');
+  list.innerHTML = unreadEmails.map(email => {
+    const color = getAvatarColor(email.from);
+    const initials = getInitials(email.from);
+    return `<div class="email-item unread border-b border-slate-100 flex gap-2 transition select-none px-3 py-2.5 cursor-pointer" onclick="openEmail(${email.id})">
+      <div class="flex items-start pt-1 flex-shrink-0"><span class="w-4 h-4"></span></div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between gap-1 mb-0.5">
+          <span class="email-sender text-sm text-slate-700 truncate font-bold">${email.from}</span>
+          <span class="text-xs text-slate-400 flex-shrink-0">${email.date}</span>
+        </div>
+        <p class="email-subject text-sm font-bold text-slate-800 truncate">${email.subject}</p>
+        <p class="text-xs text-slate-400 truncate mt-0.5">${email.preview}</p>
+      </div>
+      <span class="w-2 h-2 bg-uni-600 rounded-full flex-shrink-0 mt-3"></span>
+    </div>`;
+  }).join('') || `<div class="py-16 text-center text-sm text-slate-400">Δεν υπάρχουν μη αναγνωσμένα μηνύματα</div>`;
+}
+
+// Close notif panel when clicking outside
+document.addEventListener('click', e => {
+  const panel = document.getElementById('notifPanel');
+  if (!panel || panel.classList.contains('hidden')) return;
+  if (!e.target.closest('#notifPanel') && !e.target.closest('[onclick="toggleNotifPanel()"]')) {
+    panel.classList.add('hidden');
+  }
+});
+
+// ─── Profile menu ───────────────────────────────────────────────────────────
+function toggleProfileMenu() {
+  const menu = document.getElementById('profileMenu');
+  menu.classList.toggle('hidden');
+  // Close notifications panel if open
+  document.getElementById('notifPanel')?.classList.add('hidden');
+}
+
+function profileAction(action) {
+  document.getElementById('profileMenu').classList.add('hidden');
+  if (action === 'options') { switchView('options'); }
+  else if (action === 'password') { switchView('tools'); showToast('Μεταβείτε στην ενότητα "Αλλαγή Κωδικού"'); }
+  else if (action === 'logout') {
+    if (confirm('Αποσύνδεση από το UniMail;')) showToast('Αποσύνδεση… (προσομοίωση)');
+  }
+}
+
+// Close profile menu when clicking outside
+document.addEventListener('click', e => {
+  const menu = document.getElementById('profileMenu');
+  if (!menu) return;
+  if (!menu.classList.contains('hidden') && !menu.closest) return;
+  if (!e.target.closest('#profileMenu') && !e.target.closest('[onclick="toggleProfileMenu()"]')) {
+    menu.classList.add('hidden');
+  }
+});
+
+// ─── Quick Settings ─────────────────────────────────────────────────────────
+const qsState = { blockimages: true, htmlmail: true };
+
+function toggleQuickSettings() {
+  const panel = document.getElementById('quickSettingsPanel');
+  panel.classList.toggle('hidden');
+  document.getElementById('profileMenu').classList.add('hidden');
+  document.getElementById('notifPanel').classList.add('hidden');
+  if (!panel.classList.contains('hidden')) updateQsUI();
+}
+
+function updateQsUI() {
+  // Page size buttons
+  [15,20,30,50].forEach(n => {
+    const btn = document.getElementById('psize-' + n);
+    if (!btn) return;
+    const active = PAGE_SIZE === n;
+    btn.className = `flex-1 py-1.5 rounded-lg border text-xs font-medium transition ${active ? 'bg-uni-600 text-white border-uni-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`;
+  });
+  // Toggles
+  ['blockimages','htmlmail'].forEach(key => {
+    const btn = document.getElementById('qs-' + key);
+    if (!btn) return;
+    const on = qsState[key];
+    btn.className = `relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${on ? 'bg-uni-600' : 'bg-slate-300'}`;
+    const knob = btn.querySelector('span');
+    knob.className = `absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${on ? 'right-0.5' : 'left-0.5'}`;
+  });
+}
+
+function setPageSize(n) {
+  PAGE_SIZE = n;
+  currentPage = 1;
+  toggleQuickSettings();
+  renderEmailList();
+  showToast(`Εμφάνιση ${n} μηνυμάτων ανά σελίδα`);
+}
+
+function toggleQS(key) {
+  qsState[key] = !qsState[key];
+  // Sync with options page checkboxes
+  const el = document.getElementById('opt-' + key);
+  if (el) el.checked = qsState[key];
+  updateQsUI();
+  showToast(qsState[key] ? 'Ενεργοποιήθηκε' : 'Απενεργοποιήθηκε');
+}
+
+function quickSettingChanged() {
+  const tz = document.getElementById('qs-tz')?.value;
+  const optTz = document.getElementById('opt-tz');
+  if (optTz && tz) optTz.value = tz;
+  showToast('Ρύθμιση αποθηκεύτηκε');
+}
+
+// Close quick settings when clicking outside
+document.addEventListener('click', e => {
+  const panel = document.getElementById('quickSettingsPanel');
+  if (!panel || panel.classList.contains('hidden')) return;
+  if (!e.target.closest('#quickSettingsPanel') && !e.target.closest('[onclick="toggleQuickSettings()"]')) {
+    panel.classList.add('hidden');
+  }
+});
+
+// ─── Options ────────────────────────────────────────────────────────────────
+function saveOptions() {
+  const perpage = parseInt(document.getElementById('opt-perpage')?.value || '20');
+  if (!isNaN(perpage) && perpage > 0) {
+    // Apply messages-per-page setting live
+    const PAGE_SIZE_NEW = perpage;
+    window._pageSizeOverride = PAGE_SIZE_NEW;
+  }
+  showToast('Οι ρυθμίσεις αποθηκεύτηκαν');
+}
+
+// ─── Tools ──────────────────────────────────────────────────────────────────
+const MOCK_DIRECTORY = [
+  { name: 'Δημητρίου Μαρία', email: 'm.dimitriou@university.edu', phone: '+30 210 000 0001', dept: 'Τμήμα Πληροφορικής' },
+  { name: 'Νικολάου Γιώργος', email: 'g.nikolaou@university.edu', phone: '+30 210 000 0002', dept: 'Γραμματεία' },
+  { name: 'Αλεξίου Ελένη', email: 'e.alexiou@university.edu', phone: '+30 210 000 0003', dept: 'Τμήμα Πληροφορικής' },
+];
+
+function searchDirectory() {
+  const q = document.getElementById('dirSearchInput').value.trim().toLowerCase();
+  const resultsEl = document.getElementById('dirResults');
+  if (!q) { showToast('Εισάγετε όνομα για αναζήτηση'); return; }
+  const hits = MOCK_DIRECTORY.filter(p => p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q));
+  resultsEl.classList.remove('hidden');
+  if (hits.length === 0) {
+    resultsEl.innerHTML = '<span class="text-slate-400">Δεν βρέθηκαν αποτελέσματα.</span>';
+  } else {
+    resultsEl.innerHTML = hits.map(p => `
+      <div class="mb-2 pb-2 border-b border-slate-200 last:border-0">
+        <p class="font-semibold text-slate-700">${p.name}</p>
+        <p>${p.email} · ${p.phone}</p>
+        <p class="text-slate-400">${p.dept}</p>
+      </div>`).join('');
+  }
+}
+
+function exportContacts(type) {
+  if (allContacts.length === 0) { showToast('Δεν υπάρχουν επαφές για εξαγωγή'); return; }
+  const header = 'Όνομα,Επώνυμο,Email,Τηλέφωνο\n';
+  const rows = allContacts.map(c => `${c.firstname},${c.lastname},${c.email},${c.phone}`).join('\n');
+  const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = type === 'backup' ? 'contacts_backup.csv' : 'contacts.csv';
+  a.click(); URL.revokeObjectURL(url);
+  showToast(type === 'backup' ? 'Αντίγραφο ασφαλείας αποθηκεύτηκε' : 'Εξαγωγή επαφών ολοκληρώθηκε');
+}
+
+function fetchPop3() {
+  const host = document.getElementById('pop3Host').value.trim();
+  const user = document.getElementById('pop3User').value.trim();
+  if (!host || !user) { showToast('Συμπληρώστε διακομιστή και όνομα χρήστη'); return; }
+  showToast('Σύνδεση με POP3… (προσομοίωση)');
+  setTimeout(() => showToast('Λήψη 0 νέων μηνυμάτων από ' + host), 1500);
+}
+
+function changePassword() {
+  const old = document.getElementById('passOld').value;
+  const nw  = document.getElementById('passNew').value;
+  const cf  = document.getElementById('passConfirm').value;
+  if (!old) { showToast('Εισάγετε τον τρέχοντα κωδικό'); return; }
+  if (nw.length < 8) { showToast('Ο νέος κωδικός πρέπει να έχει τουλάχιστον 8 χαρακτήρες'); return; }
+  if (nw !== cf) { showToast('Οι κωδικοί δεν ταιριάζουν'); return; }
+  document.getElementById('passOld').value = '';
+  document.getElementById('passNew').value = '';
+  document.getElementById('passConfirm').value = '';
+  showToast('Ο κωδικός άλλαξε επιτυχώς');
+}
+
+// ─── Filters ────────────────────────────────────────────────────────────────
+let allFilters = [
+  { id: 1, enabled: true,  condField: 'from',    condOp: 'contains',     condValue: 'noreply@',            action: 'spam',   actionTarget: '',              },
+  { id: 2, enabled: true,  condField: 'subject', condOp: 'contains',     condValue: 'Members #',           action: 'move',   actionTarget: 'Announcements', },
+];
+let nextFilterId = 3;
+
+const FILTER_FIELD_LABELS = { from: 'Από', to: 'Προς', subject: 'Θέμα', cc: 'Κοιν.', body: 'Σώμα', size: 'Μέγεθος' };
+const FILTER_OP_LABELS    = { contains: 'περιέχει', not_contains: 'δεν περιέχει', equals: 'είναι', starts: 'αρχίζει με', ends: 'τελειώνει με' };
+const FILTER_ACTION_LABELS= { move: 'Μετακίνηση σε', delete: 'Διαγραφή', read: 'Σήμανση ως αναγν.', forward: 'Προώθηση σε', spam: 'Σήμανση ως spam' };
+
+function renderFilterRules() {
+  const list = document.getElementById('filterRuleList');
+  if (allFilters.length === 0) {
+    list.innerHTML = `<div class="bg-white rounded-xl border border-slate-200 p-6 text-center text-sm text-slate-400">Δεν υπάρχουν κανόνες φιλτραρίσματος. Δημιουργήστε τον πρώτο σας κανόνα.</div>`;
+    return;
+  }
+  list.innerHTML = allFilters.map((f, i) => {
+    const condText = `${FILTER_FIELD_LABELS[f.condField] || f.condField} ${FILTER_OP_LABELS[f.condOp] || f.condOp} "${f.condValue}"`;
+    const actionText = f.action === 'move' ? `${FILTER_ACTION_LABELS[f.action]} «${f.actionTarget}»`
+                     : f.action === 'forward' ? `${FILTER_ACTION_LABELS[f.action]} ${f.actionTarget}`
+                     : FILTER_ACTION_LABELS[f.action] || f.action;
+    return `<div class="bg-white rounded-xl border border-slate-200 p-4 flex items-start gap-4">
+      <div class="flex-shrink-0 pt-0.5">
+        <span class="text-xs font-bold text-slate-400">${i + 1}</span>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap mb-1">
+          <span class="inline-flex items-center gap-1 text-xs bg-uni-50 text-uni-700 border border-uni-200 rounded-full px-2.5 py-0.5 font-medium">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+            Αν ${condText}
+          </span>
+          <svg class="w-3.5 h-3.5 text-slate-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+          <span class="inline-flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2.5 py-0.5 font-medium">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            ${actionText}
+          </span>
+        </div>
+        <div class="flex items-center gap-2 mt-2">
+          <button onclick="toggleFilter(${f.id})" class="text-xs px-2.5 py-1 rounded-full border transition ${f.enabled ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-400'}">
+            ${f.enabled ? '● Ενεργό' : '○ Ανενεργό'}
+          </button>
+          <button onclick="openFilterForm(${f.id})" class="text-xs text-uni-600 hover:underline transition">Επεξεργασία</button>
+          <button onclick="deleteFilterById(${f.id})" class="text-xs text-red-400 hover:underline transition">Διαγραφή</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openFilterForm(id) {
+  document.getElementById('filterForm').classList.remove('hidden');
+  document.getElementById('filterId').value = id || '';
+  if (id) {
+    const f = allFilters.find(x => x.id === id);
+    if (!f) return;
+    document.getElementById('filterFormTitle').textContent = 'Επεξεργασία Κανόνα';
+    document.getElementById('filterCondField').value = f.condField;
+    document.getElementById('filterCondOp').value = f.condOp;
+    document.getElementById('filterCondValue').value = f.condValue;
+    document.getElementById('filterAction').value = f.action;
+    document.getElementById('deleteFilterBtn').classList.remove('hidden');
+    updateFilterActionUI();
+    if (f.action === 'move') document.getElementById('filterActionFolder').value = f.actionTarget;
+    if (f.action === 'forward') document.getElementById('filterActionEmail').value = f.actionTarget;
+  } else {
+    document.getElementById('filterFormTitle').textContent = 'Νέος Κανόνας Φιλτραρίσματος';
+    document.getElementById('filterCondField').value = 'from';
+    document.getElementById('filterCondOp').value = 'contains';
+    document.getElementById('filterCondValue').value = '';
+    document.getElementById('filterAction').value = 'move';
+    document.getElementById('deleteFilterBtn').classList.add('hidden');
+    updateFilterActionUI();
+  }
+  document.getElementById('filterForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeFilterForm() {
+  document.getElementById('filterForm').classList.add('hidden');
+}
+
+function updateFilterActionUI() {
+  const action = document.getElementById('filterAction').value;
+  const folderEl = document.getElementById('filterActionFolder');
+  const emailEl = document.getElementById('filterActionEmail');
+  const extraEl = document.getElementById('filterActionExtra');
+  if (action === 'move') { folderEl.classList.remove('hidden'); emailEl.classList.add('hidden'); extraEl.style.display = ''; }
+  else if (action === 'forward') { emailEl.classList.remove('hidden'); folderEl.classList.add('hidden'); extraEl.style.display = ''; }
+  else { extraEl.style.display = 'none'; }
+}
+
+function saveFilter() {
+  const condValue = document.getElementById('filterCondValue').value.trim();
+  if (!condValue) { showToast('Εισάγετε τιμή συνθήκης'); return; }
+  const action = document.getElementById('filterAction').value;
+  let actionTarget = '';
+  if (action === 'move') actionTarget = document.getElementById('filterActionFolder').value;
+  if (action === 'forward') actionTarget = document.getElementById('filterActionEmail').value.trim();
+
+  const id = document.getElementById('filterId').value;
+  const data = {
+    condField: document.getElementById('filterCondField').value,
+    condOp:    document.getElementById('filterCondOp').value,
+    condValue, action, actionTarget, enabled: true,
+  };
+  if (id) {
+    const f = allFilters.find(x => x.id === parseInt(id));
+    if (f) Object.assign(f, data);
+    showToast('Ο κανόνας αποθηκεύτηκε');
+  } else {
+    allFilters.push({ id: nextFilterId++, ...data });
+    showToast('Ο κανόνας δημιουργήθηκε');
+  }
+  closeFilterForm();
+  renderFilterRules();
+}
+
+function toggleFilter(id) {
+  const f = allFilters.find(x => x.id === id);
+  if (f) { f.enabled = !f.enabled; renderFilterRules(); showToast(f.enabled ? 'Κανόνας ενεργοποιήθηκε' : 'Κανόνας απενεργοποιήθηκε'); }
+}
+
+function deleteFilterById(id) {
+  if (!confirm('Διαγραφή αυτού του κανόνα;')) return;
+  allFilters = allFilters.filter(x => x.id !== id);
+  closeFilterForm();
+  renderFilterRules();
+  showToast('Ο κανόνας διαγράφηκε');
+}
+
+function deleteFilter() {
+  const id = parseInt(document.getElementById('filterId').value);
+  if (id) deleteFilterById(id);
+}
+
+// ─── View switching ─────────────────────────────────────────────────────────
+let currentView = 'inbox';
+
+function switchView(view) {
+  currentView = view;
+  // Toggle view panels
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  const viewEl = document.getElementById('view-' + view);
+  if (viewEl) viewEl.classList.add('active');
+  // Toggle nav tab active state
+  document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+  const tabEl = document.getElementById('tab-' + view);
+  if (tabEl) tabEl.classList.add('active');
+  // View-specific init
+  if (view === 'contacts') renderContactList();
+  if (view === 'folders') renderFoldersView();
+  if (view === 'filters') renderFilterRules();
+  // Close sidebar on mobile after switching view
+  if (window.innerWidth < 768) closeSidebar();
+}
+
+// ─── Init ───────────────────────────────────────────────────────────────────
+updateSortIcons();
+renderEmailList();
+updateBadge('inbox');
+renderNotifList();
+</script>
+</body>
+</html>
